@@ -67,6 +67,35 @@ p { margin: 0 0 16px; color: var(--muted); }
 .card .meta { font-size: 13px; color: var(--muted); }
 
 footer { margin-top: 18px; }
+.scenario-title {
+  margin-top: 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #cfd9e8;
+  font-weight: 600;
+}
+
+.scenario-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.scenario-chip {
+  border: 1px solid #2c3443;
+  background: #202632;
+  color: #e8eef9;
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.scenario-chip.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
 button {
   width: 100%;
   border: 0;

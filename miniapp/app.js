@@ -5,7 +5,8 @@ if (tg) {
 }
 
 const state = {
-  selected: null,
+  selectedCharacter: null,
+  selectedScenario: null,
   worldGroups: [],
 };
 
@@ -16,7 +17,6 @@ async function loadCharacters() {
   const res = await fetch('./characters.json', { cache: 'no-store' });
   const data = await res.json();
 
-  // Nuevo formato agrupado por world type
   if (Array.isArray(data.worldTypes)) {
     state.worldGroups = data.worldTypes.map((group) => ({
       id: group.id,
@@ -26,7 +26,6 @@ async function loadCharacters() {
     return;
   }
 
-  // Compatibilidad con formato antiguo plano
   const flat = data.characters || [];
   const byWorld = new Map();
   for (const c of flat) {
@@ -39,6 +38,56 @@ async function loadCharacters() {
     label: id,
     characters: chars,
   }));
+}
+
+function getSelectedCharacterFull() {
+  for (const group of state.worldGroups) {
+    for (const c of group.characters) {
+      if (state.selectedCharacter && c.id === state.selectedCharacter.id) {
+        return { ...c, world: group.id, worldLabel: group.label };
+      }
+    }
+  }
+  return null;
+}
+
+function renderScenarioSelector(container, character) {
+  const scenarios = character.scenarios || [];
+
+  const label = document.createElement('div');
+  label.className = 'scenario-title';
+  label.textContent = 'Escenario inicial';
+  container.appendChild(label);
+
+  if (!scenarios.length) {
+    const empty = document.createElement('p');
+    empty.className = 'empty';
+    empty.textContent = 'Sin escenarios configurados para este personaje';
+    container.appendChild(empty);
+    return;
+  }
+
+  const wrap = document.createElement('div');
+  wrap.className = 'scenario-grid';
+
+  for (const s of scenarios) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `scenario-chip ${state.selectedScenario?.id === s.id ? 'active' : ''}`;
+    btn.textContent = `${s.icon || '📍'} ${s.title || s.id}`;
+    btn.onclick = () => {
+      state.selectedScenario = s;
+      syncSendButton();
+      render();
+    };
+    wrap.appendChild(btn);
+  }
+
+  container.appendChild(wrap);
+}
+
+function syncSendButton() {
+  sendBtn.disabled = !(state.selectedCharacter && state.selectedScenario);
 }
 
 function render() {
@@ -66,19 +115,27 @@ function render() {
     }
 
     for (const c of group.characters) {
+      const isActiveChar = state.selectedCharacter?.id === c.id;
       const card = document.createElement('article');
-      card.className = `card ${state.selected?.id === c.id ? 'active' : ''}`;
+      card.className = `card ${isActiveChar ? 'active' : ''}`;
       card.innerHTML = `
         <div class="icon">${c.icon || '👤'}</div>
         <div class="name">${c.name}</div>
         <div class="meta">${group.label}</div>
         <div class="meta">${c.short || ''}</div>
       `;
+
       card.onclick = () => {
-        state.selected = { ...c, world: group.id };
-        sendBtn.disabled = false;
+        state.selectedCharacter = { ...c, world: group.id, worldLabel: group.label };
+        state.selectedScenario = null;
+        syncSendButton();
         render();
       };
+
+      if (isActiveChar) {
+        renderScenarioSelector(card, c);
+      }
+
       grid.appendChild(card);
     }
 
@@ -88,12 +145,14 @@ function render() {
 }
 
 sendBtn.onclick = () => {
-  if (!state.selected || !tg) return;
+  if (!state.selectedCharacter || !state.selectedScenario || !tg) return;
+
   tg.sendData(
     JSON.stringify({
-      type: 'select_character',
-      character: state.selected.id,
-      world: state.selected.world,
+      type: 'select_character_scenario',
+      character: state.selectedCharacter.id,
+      world: state.selectedCharacter.world,
+      scenario: state.selectedScenario.id,
       ts: Date.now(),
     })
   );

@@ -21,6 +21,7 @@ from .menus import (
     handle_selection,
     _load_start_content,
     _load_world_types,
+    _send_start_content,
     CHARACTER_OPTIONS,
     WORLD_TYPE_ICONS,
     SCENARIO_ICONS,
@@ -236,7 +237,7 @@ Usa `/status` para consultar tu energía en cualquier momento.
         )
 
     async def handle_web_app_data(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Recibe payload JSON de Telegram Mini App y aplica selección de personaje."""
+        """Recibe payload JSON de Telegram Mini App y aplica selección de personaje/escenario."""
         if not update.message or not update.message.web_app_data:
             return
 
@@ -251,7 +252,7 @@ Usa `/status` para consultar tu energía en cualquier momento.
             return
 
         event_type = str(payload.get("type", "")).strip()
-        if event_type != "select_character":
+        if event_type not in {"select_character", "select_character_scenario"}:
             await context.bot.send_message(chat_id=chat_id, text="⚠️ Evento de miniapp no soportado.")
             return
 
@@ -293,40 +294,97 @@ Usa `/status` para consultar tu energía en cualquier momento.
                 f"CÓMO REDIRIGIR PROPUESTAS IMPOSIBLES:\n{redirect}"
             )
 
-        # Preparar elección de escenarios
         content = _load_start_content()
         char_data = content.get(char_key, {})
         scenarios_dict = char_data.get("scenarios", {})
 
-        if not scenarios_dict:
+        # Modo legacy: solo personaje -> mostrar escenarios como antes.
+        if event_type == "select_character":
+            if not scenarios_dict:
+                self.service.ctx_manager.save_contexts()
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"✅ Personaje seleccionado: {ctx.character}.\n⚠️ No hay escenarios disponibles para este personaje.",
+                )
+                return
+
+            lines = [
+                f"Personaje: {ctx.character}",
+                f"Mundo: {WORLD_TYPE_ICONS.get(world_key, '🌐')} {world_data.get('name', world_key)}",
+                "",
+                "Elige un escenario:",
+                "",
+            ]
+            keyboard = []
+            for s_id, s_data in scenarios_dict.items():
+                icon = SCENARIO_ICONS.get(s_id, "📍")
+                title = s_data.get("title", s_id.capitalize())
+                desc_raw = s_data.get("context", "")
+                desc = desc_raw[:50] + "..." if len(desc_raw) > 50 else desc_raw
+                lines.append(f"{icon} {title} — {desc}")
+                keyboard.append([InlineKeyboardButton(f"{icon} {title}", callback_data=f"s_{char_key}_{s_id}")])
+
             self.service.ctx_manager.save_contexts()
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"✅ Personaje seleccionado: {ctx.character}.\n⚠️ No hay escenarios disponibles para este personaje.",
+                text="\n".join(lines),
+                reply_markup=InlineKeyboardMarkup(keyboard),
             )
             return
 
-        lines = [
-            f"Personaje: {ctx.character}",
-            f"Mundo: {WORLD_TYPE_ICONS.get(world_key, '🌐')} {world_data.get('name', world_key)}",
-            "",
-            "Elige un escenario:",
-            "",
-        ]
-        keyboard = []
-        for s_id, s_data in scenarios_dict.items():
-            icon = SCENARIO_ICONS.get(s_id, "📍")
-            title = s_data.get("title", s_id.capitalize())
-            desc_raw = s_data.get("context", "")
-            desc = desc_raw[:50] + "..." if len(desc_raw) > 50 else desc_raw
-            lines.append(f"{icon} {title} — {desc}")
-            keyboard.append([InlineKeyboardButton(f"{icon} {title}", callback_data=f"s_{char_key}_{s_id}")])
+        # Nuevo modo: personaje + escenario en miniapp, iniciar chat directo.
+        scenario_id = str(payload.get("scenario", "")).strip().lower()
+        if not scenario_id:
+            await context.bot.send_message(chat_id=chat_id, text="❌ No se recibió escenario.")
+            return
 
+        scenario_data = scenarios_dict.get(scenario_id)
+        if not scenario_data:
+            await context.bot.send_message(chat_id=chat_id, text="❌ Escenario no disponible para este personaje.")
+            return
+
+        # Cargar toda la info del personaje en contexto
+        ctx.char_name = char_data.get("name", ctx.character)
+        ctx.personality = char_data.get("personality", "")
+        ctx.likes = char_data.get("likes", [])
+        ctx.dislikes = char_data.get("dislikes", [])
+        ctx.physical_description = char_data.get("appearance", "")
+        ctx.outfits = char_data.get("outfits", {})
+        ctx.home = char_data.get("home", {})
+
+        ctx.character = f"{ctx.char_name} — {ctx.personality}"
+
+        loc_key = scenario_data.get("location", "bedroom")
+        ctx.scenario = scenario_data.get("title", "Escenario")
+        ctx.scenario_context = scenario_data.get("context", "")
+        ctx.initial_action = scenario_data.get("initial_action", "")
+        ctx.location = loc_key
+
+        outfit_key = scenario_data.get("clothes", "casual")
+        ctx.clothes_key = outfit_key
+        ctx.clothes = ctx.outfits.get(outfit_key, outfit_key)
+
+        ctx.mood = scenario_data.get("initial_mood", char_data.get("default_mood", "cheerful"))
+
+        if scenario_data.get("initial_image_prompt"):
+            self.service.last_prompts[user_id] = scenario_data.get("initial_image_prompt")
+            if hasattr(self.service, "_save_last_prompts"):
+                self.service._save_last_prompts()
+
+        ctx.is_setup_complete = True
         self.service.ctx_manager.save_contexts()
+
+        await _send_start_content(update, context, char_key, scenario_id)
+
         await context.bot.send_message(
             chat_id=chat_id,
-            text="\n".join(lines),
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            text=(
+                f"✅ Configuración lista.\n"
+                f"Mundo: {WORLD_TYPE_ICONS.get(world_key, '🌐')} {world_data.get('name', world_key)}\n"
+                f"Personaje: {ctx.char_name}.\n"
+                f"Escenario: {ctx.scenario}.\n\n"
+                "Puedes escribir tu mensaje cuando quieras."
+            ),
         )
 
     async def handle_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

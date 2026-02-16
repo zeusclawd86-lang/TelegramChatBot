@@ -40,9 +40,10 @@ Y usa en Telegram:
 
 ```json
 {
-  "type": "select_character",
+  "type": "select_character_scenario",
   "character": "sofia",
   "world": "realistic",
+  "scenario": "beach",
   "ts": 1730000000000
 }
 ```

@@ -8,7 +8,19 @@
           "id": "sofia",
           "name": "Sofia",
           "icon": "🔥",
-          "short": "Extrovertida, sensual y magnética"
+          "short": "Extrovertida, sensual y magnética",
+          "scenarios": [
+            {
+              "id": "club",
+              "icon": "💃",
+              "title": "Noche Salvaje en el Club"
+            },
+            {
+              "id": "beach",
+              "icon": "🏖️",
+              "title": "Atardecer en la Playa Privada"
+            }
+          ]
         }
       ]
     },
