@@ -89,7 +89,7 @@ def run_telegram_bot(config):
 
     # Configurar comandos visibles en el menú de Telegram
     async def set_commands(app):
-        from telegram import BotCommand
+        from telegram import BotCommand, MenuButtonWebApp, WebAppInfo
         commands = [
             BotCommand("start", "Iniciar configuración y elegir personaje"),
             BotCommand("status", "Ver energía restante"),
@@ -100,6 +100,19 @@ def run_telegram_bot(config):
             BotCommand("info", "Info técnica (test mode)"),
         ]
         await app.bot.set_my_commands(commands)
+
+        miniapp_url = os.getenv("TELEGRAM_MINIAPP_URL", "").strip()
+        if miniapp_url:
+            try:
+                await app.bot.set_chat_menu_button(
+                    menu_button=MenuButtonWebApp(
+                        text="🎭 Personajes",
+                        web_app=WebAppInfo(url=miniapp_url),
+                    )
+                )
+                logging.info(f"✅ Menu button MiniApp configurado: {miniapp_url}")
+            except Exception as e:
+                logging.warning(f"No se pudo configurar menu button MiniApp: {e}")
 
     # Usar el loop para ejecutar set_commands
     loop = asyncio.get_event_loop()
