@@ -71,8 +71,12 @@ class UserContext(BaseModel):
     def update_clothes(self, new_clothes: str):
         self.clothes = new_clothes
 
+    def set_relationship(self, value: int):
+        # Rango práctico para evitar valores absurdos.
+        self.relationship = max(-100, min(100, int(value)))
+
     def update_relationship(self, delta: int):
-        self.relationship += delta
+        self.set_relationship(self.relationship + int(delta))
 
 class ContextManager:
     def __init__(self, storage_path: Optional[Path] = None):

@@ -62,6 +62,7 @@ class TelegramBotHandler:
 • `/status` - Ver energía y estadísticas
 • `/help` - Ver esta guía
 • `/give_me_energy` - Recargar energía (Simulación)
+• `/setrel <valor>` - Fijar relación (debug)
 
 *Costos de Energía:*
 • Mensaje: 1 ⚡
@@ -159,6 +160,35 @@ Usa `/status` para consultar tu energía en cualquier momento.
             chat_id=update.effective_chat.id,
             text=status_text,
             parse_mode='Markdown'
+        )
+
+    async def handle_setrel(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Comando admin/debug para fijar relación absoluta: /setrel 20"""
+        user_id = update.effective_user.id
+        ctx = self.service.ctx_manager.get_context(user_id)
+
+        if not context.args:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="Uso: /setrel <valor>  (ej: /setrel 20)",
+            )
+            return
+
+        try:
+            value = int(context.args[0])
+        except ValueError:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="El valor debe ser un número entero. Ej: /setrel 20",
+            )
+            return
+
+        ctx.set_relationship(value)
+        self.service.ctx_manager.save_contexts()
+
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=f"✅ Relación fijada en {ctx.relationship}",
         )
 
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

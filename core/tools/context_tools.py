@@ -60,4 +60,13 @@ def create_context_tools(context: UserContext) -> list:
         new_score = context.relationship
         return f"Relación actualizada: {'+' if delta > 0 else ''}{delta} (total: {new_score})"
 
-    return [update_mood, update_location, update_clothes, update_relationship]
+    @tool
+    def set_relationship(value: int) -> str:
+        """Fija el puntaje de relación a un valor absoluto.
+        
+        Útil para debug/admin (ej: 20 para alta confianza).
+        """
+        context.set_relationship(value)
+        return f"Relación fijada a: {context.relationship}"
+
+    return [update_mood, update_location, update_clothes, update_relationship, set_relationship]
