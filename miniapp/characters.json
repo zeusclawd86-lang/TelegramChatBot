@@ -1,12 +1,26 @@
 {
-  "characters": [
+  "worldTypes": [
     {
-      "id": "sofia",
-      "name": "Sofia",
-      "icon": "🔥",
-      "world": "realistic",
-      "worldLabel": "🌍 Realista",
-      "short": "Extrovertida, sensual y magnética"
+      "id": "realistic",
+      "label": "🌍 Realista",
+      "characters": [
+        {
+          "id": "sofia",
+          "name": "Sofia",
+          "icon": "🔥",
+          "short": "Extrovertida, sensual y magnética"
+        }
+      ]
+    },
+    {
+      "id": "medieval_fantasy",
+      "label": "⚔️ Medieval Fantasy",
+      "characters": []
+    },
+    {
+      "id": "sci_fi",
+      "label": "🚀 Sci-Fi",
+      "characters": []
     }
   ]
 }
