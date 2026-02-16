@@ -265,8 +265,19 @@ Usa `/status` para consultar tu energía en cualquier momento.
             return
 
         event_type = str(payload.get("type", "")).strip()
+
+        # Tolerancia: si no viene type pero hay character/scenario, inferimos evento.
+        if not event_type:
+            if payload.get("character") and payload.get("scenario"):
+                event_type = "select_character_scenario"
+            elif payload.get("character"):
+                event_type = "select_character"
+
         if event_type not in {"select_character", "select_character_scenario"}:
-            await context.bot.send_message(chat_id=chat_id, text="⚠️ Evento de miniapp no soportado.")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"⚠️ Evento miniapp no soportado: {event_type or '(vacío)'}",
+            )
             return
 
         char_key = str(payload.get("character", "")).strip().lower()

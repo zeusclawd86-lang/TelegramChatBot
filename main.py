@@ -66,7 +66,8 @@ def run_telegram_bot(config):
     application.add_handler(CommandHandler('miniapp', bot_handler.handle_miniapp))
     application.add_handler(CommandHandler('info', bot_handler.handle_info))
     application.add_handler(CallbackQueryHandler(bot_handler.handle_callback))
-    application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, bot_handler.handle_web_app_data))
+    # Captura robusta de payload de MiniApp (algunos clientes no etiquetan igual WEB_APP_DATA)
+    application.add_handler(MessageHandler(filters.ALL, bot_handler.handle_web_app_data))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), bot_handler.handle_message))
     application.add_handler(MessageHandler(filters.PHOTO, bot_handler.handle_photo))
 

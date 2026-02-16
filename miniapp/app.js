@@ -194,18 +194,33 @@ function render() {
 }
 
 sendBtn.onclick = () => {
-  if (!state.selectedCharacter || !state.selectedScenario || !tg) return;
+  if (!state.selectedCharacter || !state.selectedScenario) return;
 
-  tg.sendData(
-    JSON.stringify({
-      type: 'select_character_scenario',
-      character: state.selectedCharacter.id,
-      world: state.selectedCharacter.world,
-      scenario: state.selectedScenario.id,
-      ts: Date.now(),
-    })
-  );
-  tg.close();
+  const payload = JSON.stringify({
+    type: 'select_character_scenario',
+    character: state.selectedCharacter.id,
+    world: state.selectedCharacter.world,
+    scenario: state.selectedScenario.id,
+    ts: Date.now(),
+  });
+
+  if (!tg || typeof tg.sendData !== 'function') {
+    alert('MiniApp abierta fuera de Telegram o cliente no compatible. Usa el botón /miniapp desde el chat del bot.');
+    return;
+  }
+
+  try {
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Enviando...';
+    tg.HapticFeedback?.impactOccurred?.('medium');
+    tg.sendData(payload);
+    setTimeout(() => tg.close(), 180);
+  } catch (err) {
+    console.error(err);
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Empezar chat';
+    tg.showAlert?.('No pude enviar la selección. Prueba de nuevo.');
+  }
 };
 
 (async () => {
