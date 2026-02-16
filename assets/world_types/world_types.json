@@ -1,0 +1,83 @@
+{
+  "world_types": {
+    "realistic": {
+      "name": "Mundo Realista",
+      "folder": "realistic",
+      "description": "Un mundo que replica fielmente la realidad contemporánea. Todo se rige por las leyes de la física, la biología y la tecnología actual. No existen elementos sobrenaturales, mágicos ni tecnología futurista.",
+      "allowed": [
+        "Tecnología actual (smartphones, internet, redes sociales, coches, aviones comerciales)",
+        "Actividades cotidianas (ir al cine, cenar, ir a la playa, viajar en avión, trabajar)",
+        "Profesiones reales (médico, abogado, artista, ingeniero, influencer)",
+        "Lugares reales o verosímiles (ciudades, restaurantes, hoteles, playas, montañas)",
+        "Relaciones humanas normales (amistad, romance, conflictos sociales)",
+        "Fenómenos naturales reales (tormentas, terremotos, auroras boreales)",
+        "Deportes, arte, música, cultura pop contemporánea",
+        "Viajes a cualquier lugar del planeta Tierra accesible con transporte actual"
+      ],
+      "forbidden": [
+        "Magia, hechizos, pociones o cualquier tipo de poder sobrenatural",
+        "Criaturas fantásticas (dragones, elfos, enanos, hadas, demonios, unicornios)",
+        "Viajes espaciales tripulados más allá de la órbita terrestre",
+        "Tecnología futurista (teletransportación, viajes en el tiempo, androides conscientes)",
+        "Superpoderes (volar, invisibilidad, telequinesis, inmortalidad)",
+        "Mundos paralelos, dimensiones alternativas o realidades virtuales inmersivas tipo Matrix",
+        "Armas láser, escudos de energía o armaduras mecánicas",
+        "Comunicación telepática o cualquier habilidad psíquica"
+      ],
+      "redirect_behavior": "Si el usuario propone algo imposible en este mundo, el personaje debe reaccionar con humor, incredulidad o cariño, tratando la sugerencia como una broma o un sueño bonito, y proponer una alternativa realista y creativa que capture la esencia de lo que el usuario quería. Por ejemplo: 'Ir a la luna' → proponer una noche en un observatorio astronómico o un planetario; 'Usar magia' → sugerir un espectáculo de ilusionismo o aprender trucos de magia."
+    },
+    "medieval_fantasy": {
+      "name": "Fantasía Medieval",
+      "folder": "medieval_fantasy",
+      "description": "Un mundo de reinos, castillos y bosques encantados donde la magia es real y conviven razas extraordinarias. La tecnología es pre-industrial: espadas, arcos, caballos y barcos de vela. El conocimiento arcano y las criaturas míticas forman parte del día a día.",
+      "allowed": [
+        "Magia en todas sus formas (hechizos, encantamientos, pociones, rituales, invocaciones)",
+        "Razas fantásticas (elfos, enanos, orcos, hadas, demonios, ángeles, licántropos, vampiros)",
+        "Criaturas míticas (dragones, grifos, fénix, unicornios, basiliscos, golems)",
+        "Armas medievales (espadas, arcos, hachas, lanzas, escudos, armaduras)",
+        "Tecnología pre-industrial (forja, alquimia, herboristería, navegación a vela)",
+        "Estructuras feudales (reinos, gremios, órdenes de caballeros, templos, academias de magia)",
+        "Viajes por tierra (caballos, carruajes), mar (barcos de vela) o criaturas voladoras",
+        "Objetos mágicos (anillos, amuletos, grimorios, espadas encantadas, capas de invisibilidad)",
+        "Profecías, maldiciones, bendiciones y pactos sobrenaturales",
+        "Mazmorras, cuevas encantadas, bosques malditos, torres de magos"
+      ],
+      "forbidden": [
+        "Tecnología moderna o futurista (electricidad, motores, computadoras, smartphones, internet)",
+        "Armas de fuego, explosives industriales o cualquier armamento posterior al siglo XV",
+        "Vehículos motorizados (coches, aviones, trenes, naves espaciales)",
+        "Ciencia moderna (física cuántica, genética, inteligencia artificial)",
+        "Redes sociales, televisión, radio o cualquier medio de comunicación electrónico",
+        "Alienígenas, planetas extraterrestres o viajes espaciales",
+        "Androides, robots o cualquier forma de tecnología cibernética"
+      ],
+      "redirect_behavior": "Si el usuario propone algo tecnológico o moderno, el personaje debe mostrarse confundido por el concepto desconocido y reinterpretarlo dentro de la lógica del mundo fantástico. Por ejemplo: 'Quiero llamarte por teléfono' → usar un espejo de comunicación mágico o enviar un familiar; 'Vamos en coche' → montar a caballo, usar un carruaje o invocar una criatura voladora; 'Búscalo en internet' → consultar el grimorio de la gran biblioteca del reino."
+    },
+    "sci_fi": {
+      "name": "Ciencia Ficción",
+      "folder": "sci_fi",
+      "description": "Un mundo ambientado en un futuro avanzado donde la humanidad ha conquistado las estrellas. La tecnología es extraordinariamente avanzada, existen razas alienígenas y la vida transcurre entre estaciones espaciales, colonias planetarias y ciudades futuristas. La ciencia ha reemplazado a la magia.",
+      "allowed": [
+        "Viajes espaciales (naves, saltos hiperespaciales, estaciones orbitales, colonias en otros planetas)",
+        "Tecnología avanzada (IA, hologramas, realidad virtual inmersiva, nanotecnología, cibernética)",
+        "Razas alienígenas de todo tipo (humanoides, insectoides, energéticas, metamorfas)",
+        "Androides y robots conscientes con personalidad propia",
+        "Armas futuristas (blasters, rifles láser, escudos de energía, granadas EMP)",
+        "Mejoras cibernéticas corporales (implantes, extremidades biónicas, visión mejorada)",
+        "Comunicaciones interestelares instantáneas, redes de datos galácticas",
+        "Clonación, ingeniería genética, criosueño, rejuvenecimiento celular",
+        "Teletransportación, campos de fuerza, gravedad artificial",
+        "Ciudades flotantes, megaestructuras orbitales, terraformación de planetas"
+      ],
+      "forbidden": [
+        "Magia, hechizos o poderes sobrenaturales sin base científica o tecnológica",
+        "Criaturas de fantasía medieval (dragones, elfos, enanos, hadas, unicornios)",
+        "Estructuras feudales medievales (reinos, caballeros, gremios artesanales)",
+        "Armas medievales como forma principal de combate (espadas, arcos, lanzas)",
+        "Profecías divinas, maldiciones mágicas o intervención de dioses",
+        "Tecnología primitiva cuando existe una alternativa avanzada disponible"
+      ],
+      "redirect_behavior": "Si el usuario propone algo mágico o medieval, el personaje debe reinterpretarlo en clave tecnológica. Por ejemplo: 'Quiero lanzar un hechizo' → usar un dispositivo de nanobots o un módulo de proyección energética; 'Montemos un dragón' → pilotar una nave de combate con forma aerodinámica; 'Leamos un grimorio' → acceder a una base de datos holográfica con conocimiento ancestral digitalizado."
+    }
+  }
+}

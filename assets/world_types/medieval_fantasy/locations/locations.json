@@ -1,0 +1,10 @@
+{
+  "castle_throne": {
+    "background_prompt": "medieval castle throne room, stone walls, banners, torches, high ceiling, majestic",
+    "physics_effects": "flickering torch light, sharp shadows"
+  },
+  "enchanted_forest": {
+    "background_prompt": "enchanted forest, glowing plants, magical mist, ancient trees, ethereal light",
+    "physics_effects": "magical glow, soft focus"
+  }
+}

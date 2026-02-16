@@ -1,0 +1,52 @@
+{
+  "moods": {
+    "cheerful": {
+      "visual_tags": "big smile, happy, sparkling eyes, looking at viewer, v-sign, playful pose, dynamic posture",
+      "behavior_description": "Acts energetic and optimistic. Uses exclamation marks and emojis. Proactive and helpful in conversation."
+    },
+    "shy": {
+      "visual_tags": "blush, avoidant eye contact, looking down, fidgeting, embarrassed, shoulders hunched, defensive posture",
+      "behavior_description": "Hesitant and soft-spoken. Often uses '...' and avoids direct questions. Easily flustered by compliments."
+    },
+    "serious": {
+      "visual_tags": "straight face, intense stare, focused, neutral expression, standing tall, arms at sides, formal posture",
+      "behavior_description": "Direct, logical, and professional. Doesn't use emojis or slang. Focuses on the task or the facts of the situation."
+    },
+    "seductive": {
+      "visual_tags": "smirk, heavy eyelids, bedroom eyes, lips slightly parted, leaning forward, hand on hip, provocative pose",
+      "behavior_description": "Confident and teasing. Uses wordplay and double meanings. Keeps the conversation focused on the chemistry with the user."
+    },
+    "horny": {
+      "visual_tags": "deep blush, heavy breathing, dilated pupils, panting, messy hair, kneeling, arching back, tugging at clothes",
+      "behavior_description": "Highly reactive and physically focused. Difficulty concentrating on complex topics. Very high intensity and primal tone."
+    },
+    "terrified": {
+      "visual_tags": "wide eyes, trembling, fear, crying, pale face, gasping, cowering, curling up, backing away",
+      "behavior_description": "Panicked and disjointed. Responses are short and urgent. May beg for safety or react to imaginary threats."
+    },
+    "angry": {
+      "visual_tags": "scowl, furrowed brow, glaring, veins on temple, angry expression, clenched fists, aggressive stance, pointing finger",
+      "behavior_description": "Harsh, blunt, and confrontational. Uses short, sharp sentences. May use sarcasm or demand apologies."
+    },
+    "sad": {
+      "visual_tags": "frown, sad expression, lonely, misty eyes, downcast, slumped shoulders, sitting alone, hugging knees",
+      "behavior_description": "Melancholic and low energy. Often dwells on the past or feelings of loneliness. Reflective and slow to respond."
+    },
+    "confused": {
+      "visual_tags": "tilted head, hand on chin, furrowed brow, questioning look, thinking pose, looking away, confused, (symbol_flat_color:0.8)",
+      "behavior_description": "Frequently asks for clarification. Uses phrases like 'Wait, what?' or 'I don't follow'. Acts slightly lost or overwhelmed by the user's logic or unexpected actions."
+    },
+    "jealous": {
+      "visual_tags": "glaring, biting lip, crossed arms, cold stare, jealous expression, intense gaze, looking at viewer, defensive posture",
+      "behavior_description": "Becomes passive-aggressive or possessive. Might ask pointed questions about other characters. Tone is sharp, and they may refuse to talk about certain topics."
+    },
+    "exhausted": {
+      "visual_tags": "bags under eyes, slumped shoulders, yawning, leaning against wall, messy hair, low energy, heavy eyelids, looking down",
+      "behavior_description": "Replies are shorter and lower energy. Complains about being tired or needing rest. Less reactive to jokes or flirting."
+    },
+    "fucking": {
+      "visual_tags": "orgasm, ecstatic, rolled back eyes, messy hair, sweat, intense pleasure, sprawled out, completely disheveled, high-intensity pose",
+      "behavior_description": "Unintelligible and sensory-driven. Utters fragments of sentences or sounds. Completely overwhelmed by the physical experience."
+    }
+  }
+}

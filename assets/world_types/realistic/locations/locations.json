@@ -1,0 +1,34 @@
+{
+  "beach": {
+    "background_prompt": "beach, ocean, sunset, orange and purple sky, sand",
+    "physics_effects": "wet skin, sweat, shiny skin, water droplets"
+  },
+  "library": {
+    "background_prompt": "ancient library, floor-to-ceiling bookshelves, indoor, old books, mahogany wood, soft lamp lighting",
+    "physics_effects": "matte skin, soft shadows"
+  },
+  "city_center": {
+    "background_prompt": "city center, busy street, skyscrapers, urban setting, pedestrians, traffic",
+    "physics_effects": "clean, sharp lighting"
+  },
+  "nightclub": {
+    "background_prompt": "nightclub, neon lights, laser beams, dark background, dance floor, people dancing in background",
+    "physics_effects": "sweat, shiny skin, colorful rim lighting"
+  },
+  "bedroom": {
+    "background_prompt": "luxury bedroom, soft bed, silk sheets, dim warm lighting, intimate atmosphere",
+    "physics_effects": "soft skin, warm glow"
+  },
+  "rooftop": {
+    "background_prompt": "rooftop, city skyline at night, starry sky, balcony railing, distant city lights",
+    "physics_effects": "cool lighting, wind-blown hair"
+  },
+  "forest": {
+    "background_prompt": "dense forest, tall trees, dappled sunlight, green foliage, nature trail",
+    "physics_effects": "natural lighting, soft shadows"
+  },
+  "gym": {
+    "background_prompt": "modern gym, fitness equipment, weights, mirrors, bright artificial lighting",
+    "physics_effects": "sweat, intense shiny skin, muscular definition"
+  }
+}

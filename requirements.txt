@@ -1,0 +1,9 @@
+python-telegram-bot>=21.0
+python-dotenv
+langchain-openai
+langchain-core
+langsmith
+replicate
+modal
+streamlit
+rapidfuzz

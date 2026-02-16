@@ -1,0 +1,10 @@
+{
+  "space_station": {
+    "background_prompt": "futuristic space station, window overlooking earth, high-tech consoles, metallic surfaces, blue neon accents",
+    "physics_effects": "artificial lighting, sharp reflections"
+  },
+  "cyberpunk_city": {
+    "background_prompt": "cyberpunk city, rain-slicked streets, neon signs, flying vehicles, crowded urban future",
+    "physics_effects": "wet skin, neon reflections"
+  }
+}
