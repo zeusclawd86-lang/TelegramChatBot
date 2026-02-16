@@ -1,4 +1,5 @@
 import io
+import os
 import time
 import logging
 import uuid
@@ -23,6 +24,7 @@ class TelegramBotHandler:
         self.service = chat_orchestrator
         self._last_msg_ts: dict[int, float] = {}
         self._spam_score: dict[int, int] = {}
+        self.test_mode = os.getenv("BOT_TEST_MODE", "false").lower() in ("1", "true", "yes", "on")
         
     def _is_rate_limited(self, user_id: int) -> bool:
         """Control simple anti-spam para evitar respuestas superpuestas y pérdida de inmersión."""
@@ -63,6 +65,7 @@ class TelegramBotHandler:
 • `/help` - Ver esta guía
 • `/give_me_energy` - Recargar energía (Simulación)
 • `/setrel <valor>` - Fijar relación (debug)
+• `/info` - Info técnica (solo test mode)
 
 *Costos de Energía:*
 • Mensaje: 1 ⚡
@@ -189,6 +192,49 @@ Usa `/status` para consultar tu energía en cualquier momento.
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text=f"✅ Relación fijada en {ctx.relationship}",
+        )
+
+    async def handle_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Info técnica para debugging en modo test."""
+        if not self.test_mode:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="ℹ️ /info está habilitado solo cuando BOT_TEST_MODE=true",
+            )
+            return
+
+        user_id = update.effective_user.id
+        ctx = self.service.ctx_manager.get_context(user_id)
+
+        scene_state = ctx.scene_state or {}
+        scene_lines = "\n".join([f"- {k}: {v}" for k, v in scene_state.items()]) or "- (vacío)"
+        last_prompt = (self.service.last_prompts.get(user_id) or "")
+        last_prompt_preview = (last_prompt[:220] + "...") if len(last_prompt) > 220 else last_prompt
+
+        interval = self.service._dynamic_image_interval(ctx)
+
+        info_text = (
+            "🧪 INFO (TEST MODE)\n\n"
+            f"- user_id: {user_id}\n"
+            f"- setup_complete: {ctx.is_setup_complete}\n"
+            f"- world_type: {ctx.world_type or '-'}\n"
+            f"- character: {ctx.char_name or ctx.character or '-'}\n"
+            f"- location: {ctx.location or '-'}\n"
+            f"- mood: {ctx.mood}\n"
+            f"- relationship: {ctx.relationship}\n"
+            f"- energy: {ctx.energy}\n"
+            f"- msg_count: {ctx.msg_count}\n"
+            f"- image_interval_policy: {interval}\n"
+            f"- spam_score: {self._spam_score.get(user_id, 0)}\n\n"
+            "scene_state:\n"
+            f"{scene_lines}\n\n"
+            "last_prompt (preview):\n"
+            f"{last_prompt_preview or '-'}"
+        )
+
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=info_text,
         )
 
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
