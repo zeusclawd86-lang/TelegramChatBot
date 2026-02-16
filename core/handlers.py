@@ -1,4 +1,5 @@
 import io
+import time
 import logging
 import uuid
 import base64
@@ -20,7 +21,26 @@ class TelegramBotHandler:
 
     def __init__(self, chat_orchestrator: ChatOrchestrator):
         self.service = chat_orchestrator
+        self._last_msg_ts: dict[int, float] = {}
+        self._spam_score: dict[int, int] = {}
         
+    def _is_rate_limited(self, user_id: int) -> bool:
+        """Control simple anti-spam para evitar respuestas superpuestas y pérdida de inmersión."""
+        now = time.time()
+        last = self._last_msg_ts.get(user_id, 0.0)
+        delta = now - last if last else 999.0
+
+        score = self._spam_score.get(user_id, 0)
+        if delta < 0.9:
+            score += 1
+        else:
+            score = max(0, score - 1)
+
+        self._last_msg_ts[user_id] = now
+        self._spam_score[user_id] = score
+
+        return score >= 3
+
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Maneja el comando /start iniciando el menú."""
         # Accedemos al manager a través del servicio para los menús legacy
@@ -126,7 +146,14 @@ Usa `/status` para consultar tu energía en cualquier momento.
         user_id = update.effective_user.id
         ctx = self.service.ctx_manager.get_context(user_id)
         
-        status_text = f"🔋 *Estado de Energía*\n\nEnergía disponible: *{ctx.energy}* ⚡\nMensajes enviados: {ctx.msg_count}"
+        status_text = (
+            "🔋 *Estado de sesión*\n\n"
+            f"Energía disponible: *{ctx.energy}* ⚡\n"
+            f"Mensajes enviados: {ctx.msg_count}\n"
+            f"Mood actual: {ctx.mood}\n"
+            f"Relación: {ctx.relationship}\n"
+            f"Lugar: {ctx.location or '—'}"
+        )
         
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -151,6 +178,7 @@ Usa `/status` para consultar tu energía en cualquier momento.
             self.service.image_agent,
             self.service.img_gen,
         )
+        self.service.ctx_manager.save_contexts()
 
     async def _handle_animate_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE, data: str):
         """Anima la imagen asociada al botón y envía el video."""
@@ -169,15 +197,26 @@ Usa `/status` para consultar tu energía en cualquier momento.
             await context.bot.send_chat_action(chat_id=chat_id, action="upload_video")
             
             # Usar orquestador para validar energía y animar (el agente genera la prompt de animación)
-            video_url = await self.service.animate_image_with_energy(user_id, image_url, image_prompt=image_prompt)
-            
-            await context.bot.send_video(
-                chat_id=chat_id,
-                video=video_url,
-                read_timeout=120,
-                write_timeout=120,
-                connect_timeout=60,
-            )
+            video_result = await self.service.animate_image_with_energy(user_id, image_url, image_prompt=image_prompt)
+
+            if isinstance(video_result, (bytes, bytearray)):
+                video_file = io.BytesIO(video_result)
+                video_file.name = "animation.mp4"
+                await context.bot.send_video(
+                    chat_id=chat_id,
+                    video=video_file,
+                    read_timeout=120,
+                    write_timeout=120,
+                    connect_timeout=60,
+                )
+            else:
+                await context.bot.send_video(
+                    chat_id=chat_id,
+                    video=video_result,
+                    read_timeout=120,
+                    write_timeout=120,
+                    connect_timeout=60,
+                )
         except Exception as e:
             if str(e) == "NO_ENERGY":
                 await update.callback_query.answer("⚠️ No tienes suficiente energía (requieres 40 ⚡). Usa /give_me_energy.", show_alert=True)
@@ -202,6 +241,13 @@ Usa `/status` para consultar tu energía en cualquier momento.
         chat_id = update.effective_chat.id
         text = update.message.text or update.message.caption or ""
         image_data_uri = None
+
+        if self._is_rate_limited(user_id):
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="Voy contigo, pero dame un segundo para responder bien ✨"
+            )
+            return
 
         try:
             if is_photo and update.message.photo:
@@ -264,13 +310,15 @@ Usa `/status` para consultar tu energía en cualquier momento.
             # 3. Si va a generar imagen, actualizar placeholder
             ctx = self.service.ctx_manager.get_context(user_id)
             current_count = self.service.image_counters.get(user_id, 0) + 1
-            should_gen_image = (current_count == 1 or current_count % 3 == 0) and ctx.has_energy(2)
+            interval = self.service._dynamic_image_interval(ctx)
+            scene_shift = self.service._detect_scene_shift(text, response.text)
+            should_gen_image = (current_count == 1 or current_count % interval == 0 or scene_shift) and ctx.has_energy(2)
 
             if should_gen_image:
                 await context.bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=placeholder_msg.message_id,
-                    text="🎨 _Generando imagen y respuesta..._",
+                    text="🎨 _Visualizando la escena para ti..._",
                     parse_mode='Markdown'
                 )
                 try:

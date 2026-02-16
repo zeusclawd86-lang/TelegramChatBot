@@ -1,4 +1,6 @@
+import json
 import logging
+from pathlib import Path
 from typing import Optional, Union
 from dataclasses import dataclass
 
@@ -51,6 +53,8 @@ class ChatOrchestrator:
         self.image_counters: dict[int, int] = {}
         # Último prompt generado por usuario (para usar como ejemplo)
         self.last_prompts: dict[int, str] = {}
+        self.last_prompts_path = Path(__file__).resolve().parent.parent / "data" / "last_prompts.json"
+        self._load_last_prompts()
         # Cache para botón "Animar": key -> (data-URI, image_prompt) (callback_data tiene límite 64 bytes)
         self._animate_image_cache: dict[str, tuple[str, Optional[str]]] = {}
 
@@ -61,6 +65,26 @@ class ChatOrchestrator:
     def get_image_for_animate(self, key: str) -> Optional[tuple[str, Optional[str]]]:
         """Obtiene (data-URI, image_prompt) guardado para animar; None si no existe o ya se usó."""
         return self._animate_image_cache.pop(key, None)
+
+    def _load_last_prompts(self) -> None:
+        try:
+            if not self.last_prompts_path.exists():
+                return
+            data = json.loads(self.last_prompts_path.read_text(encoding="utf-8"))
+            self.last_prompts = {int(k): str(v) for k, v in data.items()}
+        except Exception as e:
+            logging.error(f"Failed loading last prompts: {e}")
+
+    def _save_last_prompts(self) -> None:
+        try:
+            self.last_prompts_path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {str(k): v for k, v in self.last_prompts.items()}
+            self.last_prompts_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception as e:
+            logging.error(f"Failed saving last prompts: {e}")
 
     @traceable(
         name="Orchestrator_ProcessMessage",
@@ -120,6 +144,9 @@ class ChatOrchestrator:
         # Actualizar contadores
         ctx.msg_count += 1
 
+        # Persistir contexto tras posibles cambios por tools/mood/location/relación.
+        self.ctx_manager.save_contexts()
+
         # La lógica de generación de imágenes se maneja en maybe_generate_image()
         return OrchestratorResponse(
             text=reply_text,
@@ -129,7 +156,7 @@ class ChatOrchestrator:
     def get_user_context(self, user_id: int) -> UserContext:
         return self.ctx_manager.get_context(user_id)
 
-    async def animate_image_with_energy(self, user_id: int, image_url: str, image_prompt: Optional[str] = None) -> str:
+    async def animate_image_with_energy(self, user_id: int, image_url: str, image_prompt: Optional[str] = None) -> Union[str, bytes]:
         """Anima una imagen si el usuario tiene suficiente energía.
         
         Usa el AnimationPromptAgent para generar una prompt de movimiento inteligente
@@ -155,7 +182,34 @@ class ChatOrchestrator:
 
         video_url = await self.animator.animate_image(image=image_url, prompt=animation_prompt)
         ctx.consume_energy(ENERGY_COST_ANIMATION)
+        self.ctx_manager.save_contexts()
         return video_url
+
+    def _detect_scene_shift(self, user_message: str, reply_text: str) -> bool:
+        """Detecta cambios de escena/acción para forzar imagen y mejorar inmersión."""
+        text = f"{user_message} {reply_text}".lower()
+        scene_keywords = [
+            "ahora", "now", "vamos", "go to", "move", "entra", "enter", "outside", "inside",
+            "beach", "playa", "ocean", "mar", "bedroom", "habitación", "nightclub", "bar",
+        ]
+        action_keywords = [
+            "kiss", "beso", "sex", "misionero", "doggy", "from behind", "desde atrás",
+            "encima", "oral", "desnuda", "nude", "wet", "mojada", "bikini",
+        ]
+        camera_keywords = ["close-up", "primer plano", "pov", "from behind", "from above"]
+
+        return any(k in text for k in scene_keywords + action_keywords + camera_keywords)
+
+    def _dynamic_image_interval(self, ctx: UserContext) -> int:
+        """Intervalo dinámico: más frecuente en alta intimidad, más espaciado en charla normal."""
+        rel = ctx.relationship
+        mood = (ctx.mood or "").lower()
+
+        if rel >= 15 or mood in {"seductive", "excited", "passionate"}:
+            return 2
+        if rel <= -5:
+            return 4
+        return 3
 
     @traceable(
         name="Orchestrator_GenerateImage",
@@ -188,7 +242,14 @@ class ChatOrchestrator:
         current_count = self.image_counters.get(user_id, 0) + 1
         self.image_counters[user_id] = current_count
 
-        should_generate = current_count == 1 or current_count % 3 == 0
+        interval = self._dynamic_image_interval(ctx)
+        scene_shift = self._detect_scene_shift(user_message, reply_text)
+        should_generate = current_count == 1 or current_count % interval == 0 or scene_shift
+
+        logging.info(
+            f"🖼️ policy: interval={interval}, scene_shift={scene_shift}, should_generate={should_generate}"
+        )
+
         if not should_generate:
             return None
 
@@ -228,8 +289,10 @@ class ChatOrchestrator:
             image_bytes = await self.img_gen.generate_image(prompt_for_image)
             # Guardar este prompt como el último para futuras referencias
             self.last_prompts[user_id] = prompt_for_image
+            self._save_last_prompts()
             # Consumir la energía adicional ahora que sabemos que se generó
             ctx.consume_energy(additional_cost)
+            self.ctx_manager.save_contexts()
             logging.info(f"🖼️ Imagen generada para usuario {user_id} (contador: {current_count})")
             logging.info(f"📝 Prompt guardado: {prompt_for_image[:80]}...")
             return image_bytes

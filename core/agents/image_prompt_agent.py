@@ -10,6 +10,7 @@ Flujo:
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -88,6 +89,16 @@ Write a 1-2 sentence description in the "reasoning" field. This helps you stay g
   You can also add a SHORT descriptive phrase about the scene if it helps: ["girl being taken from behind on the beach at sunset"]
   NEVER include generic vague tags like "seductive pose", "private beach at sunset" — be concrete.
 
+### SCENE MEMORY (required):
+- "scene_state": object with short values to maintain visual continuity in the next image.
+  Required keys:
+  - "environment_anchor" (e.g. "beach shore", "nightclub bar", "bedroom")
+  - "action_anchor" (e.g. "sitting on sand", "kissing", "doggy style")
+  - "camera_anchor" (e.g. "medium shot", "from behind", "pov")
+  - "face_visibility" ("visible" or "not_visible")
+  - "interaction_level" ("none", "romantic", "explicit")
+  - "clothes_state" (short phrase, e.g. "wet bikini top", "nude")
+
 ### BANNED TAGS (NEVER use):
 hand_on_hilt, sword, axe, weapon, blade, lance, shield, armor, helmet, king, knight, throne, castle, dragon, leaning forward, leaning_forward, leaning forward slightly
 
@@ -115,6 +126,8 @@ If a tag introduces an object that CANNOT physically be at the current location,
 User: "{user_message}"
 Character: "{reply_text}"
 {conversation_section}
+{scene_hints_section}
+{previous_scene_state_section}
 {last_prompt_section}
 
 ## CRITICAL RULES:
@@ -131,8 +144,9 @@ Character: "{reply_text}"
 11. NEVER use the tag "leaning forward" or "leaning forward slightly". It causes the character to appear as if she is sitting on top of the viewer. Instead, use specific body positions like "sitting on sand, leaning back on hands", "standing straight", or "leaning against wall".
 12. If the character is sitting on the ground, ALWAYS use "leaning back" or "sitting upright" to maintain a clear physical distance from the camera/viewer.
 13. OBJECT REALITY CHECK: Before finalizing, review every tag and ask: "Does this object physically exist at {location}?" Remove anything that doesn't belong. A bed does NOT appear on a beach. A sofa does NOT appear in the ocean.
+14. Always return `scene_state` fully populated. It will be used to keep continuity in the next image.
 
-Output ONLY valid JSON (include "reasoning" field). No explanations, no markdown."""
+Output ONLY valid JSON (include "reasoning" field and `scene_state`). No explanations, no markdown."""
 
 
 class ImagePromptAgent:
@@ -202,6 +216,105 @@ class ImagePromptAgent:
         m = moods.get(mood.lower(), {})
         return m.get("visual_tags", "")
 
+    def _build_conversation_section(self, conversation_history: Optional[list]) -> str:
+        """Resume conversación reciente con más contexto para mantener continuidad visual."""
+        if not conversation_history:
+            return ""
+
+        recent = conversation_history[-8:]
+        lines = []
+        for msg in recent:
+            role = "User" if hasattr(msg, "type") and msg.type == "human" else "Char"
+            content = msg.content if hasattr(msg, "content") else str(msg)
+            content = re.sub(r"\s+", " ", content).strip()
+            lines.append(f"  {role}: {content[:180]}")
+
+        return "\n## RECENT CONVERSATION (last turns):\n" + "\n".join(lines)
+
+    def _build_scene_hints_section(
+        self,
+        context: UserContext,
+        user_message: str,
+        reply_text: str,
+        conversation_history: Optional[list] = None,
+    ) -> str:
+        """Genera pistas explícitas de continuidad visual para anclar la escena."""
+        corpus_parts = [user_message or "", reply_text or ""]
+        if conversation_history:
+            corpus_parts.extend(
+                [
+                    (m.content if hasattr(m, "content") else str(m))
+                    for m in conversation_history[-6:]
+                ]
+            )
+        corpus = " ".join(corpus_parts).lower()
+
+        location_hint = context.location or "unknown"
+        if any(k in corpus for k in ["playa", "beach"]):
+            location_hint = "beach"
+        elif any(k in corpus for k in ["mar", "ocean", "agua", "water", "shore", "waves"]):
+            location_hint = "ocean/shore"
+        elif any(k in corpus for k in ["habitación", "habitacion", "bedroom", "cama", "bed"]):
+            location_hint = "bedroom"
+        elif any(k in corpus for k in ["bar", "rooftop", "club", "nightclub", "discoteca"]):
+            location_hint = "nightlife/bar"
+
+        interaction = "none"
+        if any(k in corpus for k in ["kiss", "beso", "besar"]):
+            interaction = "kissing"
+        if any(k in corpus for k in ["sex", "penetr", "misionero", "doggy", "from behind", "desde atrás", "encima", "oral"]):
+            interaction = "explicit intimacy"
+
+        visibility = "face likely visible"
+        if any(k in corpus for k in ["from behind", "desde atrás", "de espaldas", "back view"]):
+            visibility = "face likely not visible"
+
+        clothes_state = context.clothes or "not specified"
+        if any(k in corpus for k in ["wet", "mojad", "agua"]):
+            clothes_state += " | likely wet"
+        if any(k in corpus for k in ["nude", "desnuda", "sin ropa"]):
+            clothes_state = "minimal or no clothes"
+
+        return (
+            "\n## SCENE CONTINUITY HINTS (must follow):\n"
+            f"- Current location anchor: {location_hint}\n"
+            f"- Interaction level: {interaction}\n"
+            f"- Face visibility hint: {visibility}\n"
+            f"- Clothes continuity hint: {clothes_state}\n"
+            "- Keep visual continuity with the immediate previous turn; avoid introducing random props/furniture."
+        )
+
+    def _build_previous_scene_state_section(self, context: UserContext) -> str:
+        """Injects previous scene state so the LLM keeps continuity unless the story changed."""
+        if not context.scene_state:
+            return ""
+
+        return (
+            "\n## PREVIOUS SCENE STATE (maintain unless dialogue explicitly changes it):\n"
+            f"- environment_anchor: {context.scene_state.get('environment_anchor', '')}\n"
+            f"- action_anchor: {context.scene_state.get('action_anchor', '')}\n"
+            f"- camera_anchor: {context.scene_state.get('camera_anchor', '')}\n"
+            f"- face_visibility: {context.scene_state.get('face_visibility', '')}\n"
+            f"- interaction_level: {context.scene_state.get('interaction_level', '')}\n"
+            f"- clothes_state: {context.scene_state.get('clothes_state', '')}"
+        )
+
+    def _update_context_scene_state(self, context: UserContext, structured: dict) -> None:
+        """Persist scene_state from LLM output for next image continuity."""
+        state = structured.get("scene_state") if isinstance(structured, dict) else None
+        if not isinstance(state, dict):
+            return
+
+        normalized = {
+            "environment_anchor": str(state.get("environment_anchor", "")).strip(),
+            "action_anchor": str(state.get("action_anchor", "")).strip(),
+            "camera_anchor": str(state.get("camera_anchor", "")).strip(),
+            "face_visibility": str(state.get("face_visibility", "")).strip(),
+            "interaction_level": str(state.get("interaction_level", "")).strip(),
+            "clothes_state": str(state.get("clothes_state", "")).strip(),
+        }
+        context.update_scene_state(normalized)
+
     def _build_structured_prompt(
         self,
         context: UserContext,
@@ -213,15 +326,14 @@ class ImagePromptAgent:
         """Construye el prompt para que el LLM genere el JSON estructurado."""
         outfits_text = ", ".join(f"{k}: {v}" for k, v in context.outfits.items()) if context.outfits else "none"
 
-        conv_section = ""
-        if conversation_history and len(conversation_history) > 0:
-            recent = conversation_history[-4:]
-            lines = []
-            for msg in recent:
-                role = "User" if hasattr(msg, "type") and msg.type == "human" else "Char"
-                content = msg.content if hasattr(msg, "content") else str(msg)
-                lines.append(f"  {role}: {content[:120]}")
-            conv_section = "\n## RECENT CONVERSATION:\n" + "\n".join(lines)
+        conv_section = self._build_conversation_section(conversation_history)
+        scene_hints_section = self._build_scene_hints_section(
+            context=context,
+            user_message=user_message,
+            reply_text=reply_text,
+            conversation_history=conversation_history,
+        )
+        previous_scene_state_section = self._build_previous_scene_state_section(context)
 
         lp_section = ""
         if last_prompt:
@@ -240,6 +352,8 @@ class ImagePromptAgent:
             user_message=user_message,
             reply_text=reply_text or "(no reply yet)",
             conversation_section=conv_section,
+            scene_hints_section=scene_hints_section,
+            previous_scene_state_section=previous_scene_state_section,
             last_prompt_section=lp_section,
         )
 
@@ -264,6 +378,109 @@ class ImagePromptAgent:
                     pass
         logging.error(f"Failed to parse structured JSON: {text[:200]}")
         return {}
+
+    def _environment_banned_tags(self, location: str) -> set[str]:
+        """Tags que no deberían aparecer según el entorno principal."""
+        loc = (location or "").lower()
+
+        indoor_tags = {
+            "bed", "pillow", "sofa", "couch", "carpet", "desk", "bookshelf", "office_chair"
+        }
+        beach_tags = {
+            "sand", "beach", "shore", "waves", "palm_tree", "surfboard", "seaside"
+        }
+
+        if any(k in loc for k in ["beach", "playa", "ocean", "mar", "sea", "shore"]):
+            return indoor_tags
+        if any(k in loc for k in ["bedroom", "habitacion", "habitación", "room", "casa", "home"]):
+            return beach_tags
+        return set()
+
+    def _needs_pov_interaction(self, user_message: str, reply_text: str) -> bool:
+        corpus = f"{user_message} {reply_text}".lower()
+        return any(
+            k in corpus
+            for k in [
+                "kiss", "beso", "besar", "sex", "misionero", "doggy",
+                "from behind", "desde atrás", "encima", "oral", "penetr",
+            ]
+        )
+
+    def _scene_shift_requested(self, user_message: str, reply_text: str) -> bool:
+        corpus = f"{user_message} {reply_text}".lower()
+        return any(
+            k in corpus
+            for k in [
+                "ahora", "now", "vamos", "go to", "move to", "change location",
+                "close-up", "primer plano", "from behind", "desde atrás", "pov",
+                "we enter", "entramos", "outside", "afuera", "inside", "adentro",
+            ]
+        )
+
+    def _apply_context_guardrails(
+        self,
+        prompt: str,
+        context: UserContext,
+        user_message: str,
+        reply_text: str,
+    ) -> str:
+        """Post-proceso determinístico para mejorar fidelidad al contexto."""
+        raw_tags = [t.strip() for t in prompt.split(",") if t and t.strip()]
+        seen = set()
+        cleaned = []
+
+        env_anchor = context.scene_state.get("environment_anchor", "") or context.location
+        banned = self._environment_banned_tags(env_anchor)
+        raw_norm = [x.lower().replace(" ", "_") for x in raw_tags]
+
+        for tag in raw_tags:
+            normalized = tag.lower().replace(" ", "_")
+
+            if normalized in banned:
+                continue
+
+            # Evitar contradicción visual frecuente: from_behind + looking_at_viewer
+            if "from_behind" in raw_norm and normalized in {
+                "looking_at_viewer", "looking_at_camera", "eye_contact"
+            }:
+                continue
+
+            if normalized not in seen:
+                cleaned.append(tag)
+                seen.add(normalized)
+
+        normalized_cleaned = {t.lower().replace(" ", "_") for t in cleaned}
+
+        # Hard requirements de coherencia
+        if "1girl" not in normalized_cleaned:
+            cleaned.insert(0, "1girl")
+            normalized_cleaned.add("1girl")
+
+        if self._needs_pov_interaction(user_message, reply_text):
+            if "pov" not in normalized_cleaned:
+                cleaned.append("pov")
+                normalized_cleaned.add("pov")
+            if "1boy" not in normalized_cleaned:
+                cleaned.append("1boy")
+                normalized_cleaned.add("1boy")
+
+        # Si no hubo cambio explícito de escena, mantener anclas visuales previas.
+        if context.scene_state and not self._scene_shift_requested(user_message, reply_text):
+            camera_anchor = context.scene_state.get("camera_anchor", "").strip().lower().replace(" ", "_")
+            action_anchor = context.scene_state.get("action_anchor", "").strip().lower().replace(" ", "_")
+            env_prev = context.scene_state.get("environment_anchor", "").strip().lower().replace(" ", "_")
+
+            if camera_anchor and camera_anchor not in normalized_cleaned:
+                cleaned.append(camera_anchor)
+                normalized_cleaned.add(camera_anchor)
+            if action_anchor and action_anchor not in normalized_cleaned:
+                cleaned.append(action_anchor)
+                normalized_cleaned.add(action_anchor)
+            if env_prev and env_prev not in normalized_cleaned:
+                cleaned.append(env_prev)
+                normalized_cleaned.add(env_prev)
+
+        return ", ".join(cleaned)
 
     def _assemble_prompt(self, structured: dict, context: UserContext) -> str:
         """Ensambla el prompt final mapeando conceptos a tags reales de Danbooru.
@@ -367,28 +584,38 @@ class ImagePromptAgent:
 
             if not structured:
                 logging.warning("LLM did not return valid structured JSON, using fallback")
-                return self._fallback_prompt(context)
+                return self._fallback_prompt(context, user_message, reply_text or "")
 
+            self._update_context_scene_state(context, structured)
             final_prompt = self._assemble_prompt(structured, context)
+            final_prompt = self._apply_context_guardrails(
+                final_prompt,
+                context=context,
+                user_message=user_message,
+                reply_text=reply_text or "",
+            )
 
             mapped_count = len([t for f in ["background", "subject", "appearance", "clothing", "pose", "expression", "camera", "nsfw"] for t in structured.get(f, [])])
             extra_count = len(structured.get("extras", []))
             logging.info(f"  Structured: {mapped_count} concepts + {extra_count} extras")
-            logging.info(f"✅ Final prompt: {final_prompt[:120]}...")
+            logging.info(f"✅ Final prompt (guardrailed): {final_prompt[:120]}...")
             return final_prompt
 
         except Exception as e:
             logging.error(f"❌ Error in ImagePromptAgent: {e}")
-            return self._fallback_prompt(context)
+            return self._fallback_prompt(context, user_message, reply_text or "")
 
-    def _fallback_prompt(self, context: UserContext) -> str:
-        """Prompt de fallback usando datos del contexto directamente."""
+    def _fallback_prompt(self, context: UserContext, user_message: str, reply_text: str) -> str:
+        """Prompt de fallback usando datos del contexto + guardrails de coherencia."""
         parts = [QUALITY_TAGS, "1girl"]
         if context.physical_description:
             parts.append(context.physical_description)
         if context.clothes:
             parts.append(context.clothes)
-        parts.append("standing, looking at viewer")
+
+        # Pose base conservadora
+        parts.append("medium shot")
+        parts.append("sitting") if "sit" in (reply_text or "").lower() else parts.append("standing")
 
         mood_visuals = self._get_mood_visuals(context.mood or "neutral")
         if mood_visuals:
@@ -400,4 +627,17 @@ class ImagePromptAgent:
             if bg:
                 parts.insert(1, bg)
 
-        return ", ".join(parts)
+        prompt = ", ".join(parts)
+        guarded = self._apply_context_guardrails(prompt, context, user_message, reply_text)
+
+        # Persistir anclas mínimas para la próxima imagen incluso en fallback.
+        context.update_scene_state({
+            "environment_anchor": (context.location or "").strip(),
+            "action_anchor": "sitting" if "sit" in (reply_text or "").lower() else "standing",
+            "camera_anchor": "medium shot",
+            "face_visibility": "visible",
+            "interaction_level": "explicit" if self._needs_pov_interaction(user_message, reply_text) else "none",
+            "clothes_state": (context.clothes or "").strip(),
+        })
+
+        return guarded

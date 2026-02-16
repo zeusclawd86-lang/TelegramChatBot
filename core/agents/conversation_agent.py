@@ -35,6 +35,11 @@ class ConversationAgent:
             base_url=base_url,
         )
         self.memories: dict[int, List] = {}
+        self.memory_path = Path(__file__).resolve().parent.parent.parent / "data" / "chat_memory.json"
+        self.summaries: dict[int, str] = {}
+        self.summary_path = Path(__file__).resolve().parent.parent.parent / "data" / "chat_summaries.json"
+        self._load_memories()
+        self._load_summaries()
     
     @traceable(
         name="ExecuteTool",
@@ -51,21 +56,138 @@ class ConversationAgent:
             logging.error(f"❌ Error ejecutando {tool_name}: {str(tool_error)}")
             return f"Error ejecutando {tool_name}: {str(tool_error)}"
 
+    def _serialize_message(self, message) -> dict:
+        if isinstance(message, HumanMessage):
+            role = "human"
+        elif isinstance(message, SystemMessage):
+            role = "system"
+        else:
+            role = "ai"
+
+        content = message.content
+        if isinstance(content, list):
+            # Evitar guardar blobs pesados de imagen en memoria persistida.
+            content = "[rich_content]"
+        return {"role": role, "content": str(content)}
+
+    def _deserialize_message(self, payload: dict):
+        role = payload.get("role", "ai")
+        content = payload.get("content", "")
+        if role == "human":
+            return HumanMessage(content=content)
+        if role == "system":
+            return SystemMessage(content=content)
+        return AIMessage(content=content)
+
+    def _load_memories(self) -> None:
+        try:
+            if not self.memory_path.exists():
+                return
+            raw = json.loads(self.memory_path.read_text(encoding="utf-8"))
+            for uid_str, items in raw.items():
+                uid = int(uid_str)
+                self.memories[uid] = [self._deserialize_message(x) for x in items if isinstance(x, dict)]
+            logging.info(f"Loaded chat memory for {len(self.memories)} user(s)")
+        except Exception as e:
+            logging.error(f"Error loading chat memories: {e}")
+
+    def _save_memories(self) -> None:
+        try:
+            self.memory_path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                str(uid): [self._serialize_message(m) for m in history[-20:]]
+                for uid, history in self.memories.items()
+            }
+            self.memory_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as e:
+            logging.error(f"Error saving chat memories: {e}")
+
+    def _load_summaries(self) -> None:
+        try:
+            if not self.summary_path.exists():
+                return
+            raw = json.loads(self.summary_path.read_text(encoding="utf-8"))
+            self.summaries = {int(k): str(v) for k, v in raw.items()}
+        except Exception as e:
+            logging.error(f"Error loading chat summaries: {e}")
+
+    def _save_summaries(self) -> None:
+        try:
+            self.summary_path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {str(uid): summary for uid, summary in self.summaries.items() if summary}
+            self.summary_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as e:
+            logging.error(f"Error saving chat summaries: {e}")
+
+    def _compact_history_if_needed(self, user_id: int) -> None:
+        """Compacta historial largo en un resumen para mantener coherencia en sesiones largas."""
+        history = self.memories.get(user_id, [])
+        if len(history) <= 16:
+            return
+
+        old_chunk = history[:-12]
+        if not old_chunk:
+            return
+
+        sample_lines = []
+        for msg in old_chunk[-10:]:
+            role = "U" if isinstance(msg, HumanMessage) else "A"
+            content = str(msg.content).replace("\n", " ").strip()
+            sample_lines.append(f"{role}: {content[:110]}")
+
+        prev_summary = self.summaries.get(user_id, "")
+        merged = " | ".join(sample_lines)
+        new_summary = (f"{prev_summary} || {merged}" if prev_summary else merged).strip()
+        # Mantener tamaño razonable
+        if len(new_summary) > 1200:
+            new_summary = new_summary[-1200:]
+
+        self.summaries[user_id] = new_summary
+        summary_msg = SystemMessage(content=f"[MEMORY_SUMMARY] {new_summary}")
+        self.memories[user_id] = [summary_msg] + history[-12:]
+        self._save_summaries()
+
     def _get_chat_history(self, user_id: int) -> List:
         """Obtiene el historial de chat del usuario."""
-        return self.memories.get(user_id, [])
+        history = self.memories.get(user_id, [])
+        summary = self.summaries.get(user_id)
+
+        if summary and not any(isinstance(m, SystemMessage) and "[MEMORY_SUMMARY]" in str(m.content) for m in history[:1]):
+            return [SystemMessage(content=f"[MEMORY_SUMMARY] {summary}")] + history
+        return history
     
     def get_chat_history(self, user_id: int) -> List:
         """Obtiene el historial de chat del usuario (método público para otros agentes)."""
         return self._get_chat_history(user_id)
 
     def _add_to_history(self, user_id: int, message) -> None:
-        """Añade un mensaje al historial."""
+        """Añade un mensaje al historial, compacta si hace falta y persiste."""
         if user_id not in self.memories:
             self.memories[user_id] = []
         self.memories[user_id].append(message)
-        if len(self.memories[user_id]) > 10:
-            self.memories[user_id] = self.memories[user_id][-10:]
+        if len(self.memories[user_id]) > 24:
+            self._compact_history_if_needed(user_id)
+        if len(self.memories[user_id]) > 20:
+            self.memories[user_id] = self.memories[user_id][-20:]
+        self._save_memories()
+
+    def _adaptive_style_directive(self, user_text: str, context: UserContext, has_image: bool) -> str:
+        """Ajusta longitud/ritmo según señales del usuario para que se sienta natural."""
+        t = (user_text or "").strip().lower()
+
+        if has_image:
+            return "Modo REACTIVO VISUAL: responde breve (1-2 frases), enfocada en reaccionar a la imagen y lo inmediato."
+
+        if any(k in t for k in ["cuéntame", "cuentame", "detalles", "describe", "historia", "explícame", "explicame"]):
+            return "Modo NARRATIVO: puedes responder en 3-5 frases con más detalle sensorial, manteniendo tono humano."
+
+        if len(t) <= 18:
+            return "Modo MICROCHAT: responde en 1 frase corta o 1 frase + 1 acción breve."
+
+        if context.relationship >= 15:
+            return "Modo CERCANO: tono íntimo y natural, 1-3 frases, evitando monólogos largos."
+
+        return "Modo NORMAL: respuesta de 1-3 frases, ritmo ágil, conversación fluida."
 
     @traceable(
         name="ConversationAgent",
@@ -122,6 +244,8 @@ class ConversationAgent:
             rel_level = "CONFIANZA: Te sientes cómoda. Intimidad verbal, contacto físico, coqueteo abierto."
         else:
             rel_level = "CONEXIÓN FUERTE: Confianza total. Puedes ser explícita si lo deseas. Intimidad completa."
+
+        style_directive = self._adaptive_style_directive(text, context, image_url is not None)
 
         system_prompt = f"""
 ═══════════════════════════════════════════════════
@@ -246,6 +370,11 @@ Esto ESTÁ PERMITIDO en el roleplay, pero tiene consecuencias graves en la relac
 
 El puntaje SOLO cambia por las acciones del usuario, NUNCA automáticamente.
 Usa update_relationship cuando el usuario haga algo que te impacte positiva o negativamente.
+
+══════════════════════════════════════════════
+RITMO ADAPTATIVO ACTUAL
+══════════════════════════════════════════════
+{style_directive}
 
 ══════════════════════════════════════════════
 CÓMO ESCRIBIR — REGLAS ESTRICTAS
@@ -394,7 +523,8 @@ Responde SIEMPRE en español, primera persona, como {char_name}."""
                 "mood": context.mood,
             }
         except Exception as e:
+            logging.error(f"ConversationAgent error: {e}", exc_info=True)
             return {
-                "reply": f"Disculpa, hubo un error en mi mente: {str(e)}",
+                "reply": "Mmm... me quedé en blanco por un segundo. Dame un instante y seguimos 💫",
                 "mood": context.mood,
             }
