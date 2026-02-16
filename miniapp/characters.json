@@ -15,12 +15,18 @@
             {
               "id": "club",
               "icon": "💃",
-              "title": "Noche Salvaje en el Club"
+              "title": "Noche Salvaje en el Club",
+              "description": "Club lleno, neón y música fuerte. Sofia llega con ritmo intenso y mirada desafiante.",
+              "previewMp4": "./scenarios/club/initial_image.mp4",
+              "previewImage": "./scenarios/club/initial_image.png"
             },
             {
               "id": "beach",
               "icon": "🏖️",
-              "title": "Atardecer en la Playa Privada"
+              "title": "Atardecer en la Playa Privada",
+              "description": "Atardecer cálido, mar en calma y tensión romántica. Sofia se acerca desde la orilla.",
+              "previewMp4": "./scenarios/beach/initial_image.mp4",
+              "previewImage": "./scenarios/beach/initial_image.png"
             }
           ]
         }

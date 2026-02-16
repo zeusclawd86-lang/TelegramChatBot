@@ -13,6 +13,7 @@ const state = {
 
 const worldTabsEl = document.getElementById('worldTabs');
 const charactersEl = document.getElementById('characters');
+const scenariosEl = document.getElementById('scenarios');
 const sendBtn = document.getElementById('sendBtn');
 
 async function loadCharacters() {
@@ -53,53 +54,20 @@ function renderWorldTabs() {
     tab.textContent = group.label;
     tab.onclick = () => {
       state.activeWorldId = group.id;
+      state.selectedCharacter = null;
+      state.selectedScenario = null;
+      syncSendButton();
       render();
     };
     worldTabsEl.appendChild(tab);
   }
 }
 
-function renderScenarioSelector(container, character) {
-  const scenarios = character.scenarios || [];
-
-  const label = document.createElement('div');
-  label.className = 'scenario-title';
-  label.textContent = 'Escenario inicial';
-  container.appendChild(label);
-
-  if (!scenarios.length) {
-    const empty = document.createElement('p');
-    empty.className = 'empty';
-    empty.textContent = 'Sin escenarios configurados para este personaje';
-    container.appendChild(empty);
-    return;
-  }
-
-  const wrap = document.createElement('div');
-  wrap.className = 'scenario-grid';
-
-  for (const s of scenarios) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = `scenario-chip ${state.selectedScenario?.id === s.id ? 'active' : ''}`;
-    btn.textContent = `${s.icon || '📍'} ${s.title || s.id}`;
-    btn.onclick = () => {
-      state.selectedScenario = s;
-      syncSendButton();
-      render();
-    };
-    wrap.appendChild(btn);
-  }
-
-  container.appendChild(wrap);
-}
-
 function syncSendButton() {
   sendBtn.disabled = !(state.selectedCharacter && state.selectedScenario);
 }
 
-function render() {
-  renderWorldTabs();
+function renderCharacters() {
   charactersEl.innerHTML = '';
 
   const group = state.worldGroups.find((g) => g.id === state.activeWorldId) || state.worldGroups[0];
@@ -113,7 +81,7 @@ function render() {
 
   const title = document.createElement('h2');
   title.className = 'group-title';
-  title.textContent = group.label;
+  title.textContent = `${group.label} · Personajes`;
   section.appendChild(title);
 
   const grid = document.createElement('div');
@@ -147,18 +115,82 @@ function render() {
       state.selectedCharacter = { ...c, world: group.id, worldLabel: group.label };
       state.selectedScenario = null;
       syncSendButton();
-      render();
+      renderScenarios();
+      renderCharacters();
     };
-
-    if (isActiveChar) {
-      renderScenarioSelector(card, c);
-    }
 
     grid.appendChild(card);
   }
 
   section.appendChild(grid);
   charactersEl.appendChild(section);
+}
+
+function renderScenarios() {
+  scenariosEl.innerHTML = '';
+
+  if (!state.selectedCharacter) {
+    scenariosEl.classList.add('hidden');
+    return;
+  }
+
+  scenariosEl.classList.remove('hidden');
+
+  const header = document.createElement('h2');
+  header.className = 'group-title';
+  header.textContent = `Escenarios de ${state.selectedCharacter.name}`;
+  scenariosEl.appendChild(header);
+
+  const sub = document.createElement('p');
+  sub.className = 'subtitle';
+  sub.textContent = 'Selecciona un escenario para empezar el chat.';
+  scenariosEl.appendChild(sub);
+
+  const scenarios = state.selectedCharacter.scenarios || [];
+  if (!scenarios.length) {
+    const empty = document.createElement('p');
+    empty.className = 'empty';
+    empty.textContent = 'Este personaje no tiene escenarios configurados.';
+    scenariosEl.appendChild(empty);
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'scenario-cards';
+
+  for (const s of scenarios) {
+    const active = state.selectedScenario?.id === s.id;
+    const card = document.createElement('article');
+    card.className = `scenario-card ${active ? 'active' : ''}`;
+
+    const mediaHtml = s.previewMp4
+      ? `<video class="scenario-media" src="${s.previewMp4}" autoplay muted loop playsinline></video>`
+      : s.previewImage
+      ? `<img class="scenario-media" src="${s.previewImage}" alt="${s.title || s.id}" />`
+      : `<div class="scenario-media scenario-fallback">${s.icon || '📍'}</div>`;
+
+    card.innerHTML = `
+      ${mediaHtml}
+      <div class="scenario-name">${s.icon || '📍'} ${s.title || s.id}</div>
+      <div class="scenario-desc">${s.description || ''}</div>
+    `;
+
+    card.onclick = () => {
+      state.selectedScenario = s;
+      syncSendButton();
+      renderScenarios();
+    };
+
+    grid.appendChild(card);
+  }
+
+  scenariosEl.appendChild(grid);
+}
+
+function render() {
+  renderWorldTabs();
+  renderCharacters();
+  renderScenarios();
 }
 
 sendBtn.onclick = () => {
@@ -180,6 +212,7 @@ sendBtn.onclick = () => {
   try {
     await loadCharacters();
     render();
+    syncSendButton();
   } catch (err) {
     charactersEl.innerHTML = '<p>No se pudo cargar la lista de personajes.</p>';
     console.error(err);
