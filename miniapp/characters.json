@@ -8,7 +8,9 @@
           "id": "sofia",
           "name": "Sofia",
           "icon": "🔥",
+          "image": "./images/sofia.png",
           "short": "Extrovertida, sensual y magnética",
+          "description": "Energía alta, actitud atrevida y estilo provocador. Ideal para escenarios de club o playa con vibra intensa.",
           "scenarios": [
             {
               "id": "club",

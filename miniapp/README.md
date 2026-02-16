@@ -1,6 +1,6 @@
 # Telegram MiniApp - Selector de personajes
 
-Mini app web para elegir personaje (agrupado por `world type`) y enviar la selección al bot usando `Telegram.WebApp.sendData(...)`.
+Mini app web para elegir personaje (con **solapas por world type**) y escenario, enviando la selección al bot usando `Telegram.WebApp.sendData(...)`.
 
 ## Despliegue rápido
 

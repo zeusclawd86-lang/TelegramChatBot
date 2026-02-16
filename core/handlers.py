@@ -67,6 +67,19 @@ class TelegramBotHandler:
         # (Idealmente refactorizaríamos menus.py también, pero por ahora mantenemos compatibilidad)
         await start_menu(update, context, self.service.ctx_manager)
 
+        if self.miniapp_url:
+            try:
+                kb = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🎭 Abrir miniapp", web_app=WebAppInfo(url=self.miniapp_url))]
+                ])
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text="O si prefieres, elige personaje y escenario desde la miniapp:",
+                    reply_markup=kb,
+                )
+            except Exception as e:
+                logging.warning(f"No se pudo enviar botón miniapp en /start: {e}")
+
     async def handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Maneja el comando /help mostrando la guía de uso."""
         user_id = update.effective_user.id

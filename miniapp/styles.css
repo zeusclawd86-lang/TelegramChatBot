@@ -24,6 +24,30 @@ body {
 h1 { margin: 0 0 8px; }
 p { margin: 0 0 16px; color: var(--muted); }
 
+.tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-bottom: 12px;
+  padding-bottom: 4px;
+}
+
+.tab {
+  border: 1px solid #2b3444;
+  background: #1a2230;
+  color: #dbe7f9;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.tab.active {
+  border-color: var(--accent);
+  background: #213046;
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
 .grid {
   display: grid;
   gap: 16px;
@@ -62,9 +86,30 @@ p { margin: 0 0 16px; color: var(--muted); }
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
-.card .icon { font-size: 22px; margin-bottom: 8px; }
+.char-image {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-bottom: 10px;
+  border: 1px solid #2c3443;
+}
+
+.char-image-fallback {
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  background: linear-gradient(135deg, #233047, #2f1f3f);
+}
+
 .card .name { font-weight: 700; margin-bottom: 4px; }
 .card .meta { font-size: 13px; color: var(--muted); }
+.card .desc {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #d6deeb;
+  line-height: 1.35;
+}
 
 footer { margin-top: 18px; }
 .scenario-title {
@@ -96,7 +141,7 @@ footer { margin-top: 18px; }
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
-button {
+#sendBtn {
   width: 100%;
   border: 0;
   border-radius: 10px;
@@ -106,7 +151,8 @@ button {
   color: #fff;
   cursor: pointer;
 }
-button:disabled {
+
+#sendBtn:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
