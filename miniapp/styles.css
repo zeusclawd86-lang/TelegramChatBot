@@ -1,0 +1,66 @@
+:root {
+  --bg: #0f1115;
+  --card: #1b1f28;
+  --muted: #9aa3b2;
+  --text: #eef2f7;
+  --accent: #4ea1ff;
+  --accent-soft: rgba(78, 161, 255, 0.2);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+h1 { margin: 0 0 8px; }
+p { margin: 0 0 16px; color: var(--muted); }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 14px;
+  cursor: pointer;
+  transition: 120ms ease;
+}
+
+.card:hover { border-color: var(--accent-soft); }
+.card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.card .icon { font-size: 22px; margin-bottom: 8px; }
+.card .name { font-weight: 700; margin-bottom: 4px; }
+.card .meta { font-size: 13px; color: var(--muted); }
+
+footer { margin-top: 18px; }
+button {
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-weight: 700;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

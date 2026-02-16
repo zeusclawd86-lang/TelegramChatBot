@@ -63,8 +63,10 @@ def run_telegram_bot(config):
     application.add_handler(CommandHandler('checkpoint', bot_handler.handle_checkpoint))
     application.add_handler(CommandHandler('give_me_energy', bot_handler.handle_give_me_energy))
     application.add_handler(CommandHandler('setrel', bot_handler.handle_setrel))
+    application.add_handler(CommandHandler('miniapp', bot_handler.handle_miniapp))
     application.add_handler(CommandHandler('info', bot_handler.handle_info))
     application.add_handler(CallbackQueryHandler(bot_handler.handle_callback))
+    application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, bot_handler.handle_web_app_data))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), bot_handler.handle_message))
     application.add_handler(MessageHandler(filters.PHOTO, bot_handler.handle_photo))
 
@@ -94,6 +96,7 @@ def run_telegram_bot(config):
             BotCommand("help", "Ver guía de uso"),
             BotCommand("give_me_energy", "Recargar energía"),
             BotCommand("setrel", "Fijar relación (debug)"),
+            BotCommand("miniapp", "Abrir selector visual"),
             BotCommand("info", "Info técnica (test mode)"),
         ]
         await app.bot.set_my_commands(commands)

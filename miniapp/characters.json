@@ -1,0 +1,12 @@
+{
+  "characters": [
+    {
+      "id": "sofia",
+      "name": "Sofia",
+      "icon": "🔥",
+      "world": "realistic",
+      "worldLabel": "🌍 Realista",
+      "short": "Extrovertida, sensual y magnética"
+    }
+  ]
+}

@@ -1,14 +1,30 @@
 import io
 import os
+import json
 import time
 import logging
 import uuid
 import base64
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    WebAppInfo,
+)
 from telegram.ext import ContextTypes
 
 from .orchestrator import ChatOrchestrator
-from .menus import start_menu, handle_selection
+from .menus import (
+    start_menu,
+    handle_selection,
+    _load_start_content,
+    _load_world_types,
+    CHARACTER_OPTIONS,
+    WORLD_TYPE_ICONS,
+    SCENARIO_ICONS,
+)
 
 class TelegramBotHandler:
     """
@@ -25,6 +41,7 @@ class TelegramBotHandler:
         self._last_msg_ts: dict[int, float] = {}
         self._spam_score: dict[int, int] = {}
         self.test_mode = os.getenv("BOT_TEST_MODE", "false").lower() in ("1", "true", "yes", "on")
+        self.miniapp_url = os.getenv("TELEGRAM_MINIAPP_URL", "").strip()
         
     def _is_rate_limited(self, user_id: int) -> bool:
         """Control simple anti-spam para evitar respuestas superpuestas y pérdida de inmersión."""
@@ -65,6 +82,7 @@ class TelegramBotHandler:
 • `/help` - Ver esta guía
 • `/give_me_energy` - Recargar energía (Simulación)
 • `/setrel <valor>` - Fijar relación (debug)
+• `/miniapp` - Abrir selector visual de personaje
 • `/info` - Info técnica (solo test mode)
 
 *Costos de Energía:*
@@ -192,6 +210,123 @@ Usa `/status` para consultar tu energía en cualquier momento.
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text=f"✅ Relación fijada en {ctx.relationship}",
+        )
+
+    async def handle_miniapp(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Abre la miniapp de selección de personajes en Telegram."""
+        chat_id = update.effective_chat.id
+
+        if not self.miniapp_url:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="⚠️ Falta configurar TELEGRAM_MINIAPP_URL en el entorno.",
+            )
+            return
+
+        # Botón principal para abrir la miniapp
+        kb = ReplyKeyboardMarkup(
+            [[KeyboardButton("🎭 Abrir selector de personaje", web_app=WebAppInfo(url=self.miniapp_url))]],
+            resize_keyboard=True,
+            one_time_keyboard=True,
+        )
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="Abre la miniapp y elige personaje.",
+            reply_markup=kb,
+        )
+
+    async def handle_web_app_data(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Recibe payload JSON de Telegram Mini App y aplica selección de personaje."""
+        if not update.message or not update.message.web_app_data:
+            return
+
+        user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
+        payload_raw = update.message.web_app_data.data or ""
+
+        try:
+            payload = json.loads(payload_raw)
+        except Exception:
+            await context.bot.send_message(chat_id=chat_id, text="❌ Datos inválidos de la miniapp.")
+            return
+
+        event_type = str(payload.get("type", "")).strip()
+        if event_type != "select_character":
+            await context.bot.send_message(chat_id=chat_id, text="⚠️ Evento de miniapp no soportado.")
+            return
+
+        char_key = str(payload.get("character", "")).strip().lower()
+        if not char_key:
+            await context.bot.send_message(chat_id=chat_id, text="❌ No se recibió personaje.")
+            return
+
+        # Localizar mundo/personaje
+        world_key = None
+        character_config = None
+        for w_key, world_chars in CHARACTER_OPTIONS.items():
+            if char_key in world_chars:
+                world_key = w_key
+                character_config = world_chars[char_key]
+                break
+
+        if not world_key or not character_config:
+            await context.bot.send_message(chat_id=chat_id, text="❌ Personaje no disponible.")
+            return
+
+        ctx = self.service.ctx_manager.get_context(user_id)
+        ctx.char_key = char_key
+        ctx.character = character_config.get("name", char_key)
+        ctx.world_type = world_key
+
+        # Cargar contexto de mundo
+        world_types = _load_world_types()
+        world_data = world_types.get(world_key, {})
+        if world_data:
+            allowed = "\n".join(f"  ✓ {item}" for item in world_data.get("allowed", []))
+            forbidden = "\n".join(f"  ✗ {item}" for item in world_data.get("forbidden", []))
+            redirect = world_data.get("redirect_behavior", "")
+            ctx.world_rules = (
+                f"TIPO DE MUNDO: {world_data.get('name', world_key)}\n"
+                f"DESCRIPCIÓN: {world_data.get('description', '')}\n\n"
+                f"LO QUE EXISTE Y ESTÁ PERMITIDO:\n{allowed}\n\n"
+                f"LO QUE NO EXISTE Y ESTÁ PROHIBIDO:\n{forbidden}\n\n"
+                f"CÓMO REDIRIGIR PROPUESTAS IMPOSIBLES:\n{redirect}"
+            )
+
+        # Preparar elección de escenarios
+        content = _load_start_content()
+        char_data = content.get(char_key, {})
+        scenarios_dict = char_data.get("scenarios", {})
+
+        if not scenarios_dict:
+            self.service.ctx_manager.save_contexts()
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"✅ Personaje seleccionado: {ctx.character}.\n⚠️ No hay escenarios disponibles para este personaje.",
+            )
+            return
+
+        lines = [
+            f"Personaje: {ctx.character}",
+            f"Mundo: {WORLD_TYPE_ICONS.get(world_key, '🌐')} {world_data.get('name', world_key)}",
+            "",
+            "Elige un escenario:",
+            "",
+        ]
+        keyboard = []
+        for s_id, s_data in scenarios_dict.items():
+            icon = SCENARIO_ICONS.get(s_id, "📍")
+            title = s_data.get("title", s_id.capitalize())
+            desc_raw = s_data.get("context", "")
+            desc = desc_raw[:50] + "..." if len(desc_raw) > 50 else desc_raw
+            lines.append(f"{icon} {title} — {desc}")
+            keyboard.append([InlineKeyboardButton(f"{icon} {title}", callback_data=f"s_{char_key}_{s_id}")])
+
+        self.service.ctx_manager.save_contexts()
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="\n".join(lines),
+            reply_markup=InlineKeyboardMarkup(keyboard),
         )
 
     async def handle_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
