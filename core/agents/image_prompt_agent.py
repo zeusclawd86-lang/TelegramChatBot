@@ -22,8 +22,9 @@ from ..context import UserContext
 from ..services.danbooru_db import DanbooruTagMapper
 
 QUALITY_TAGS = (
+    "score_9, score_8_up, score_7_up, source_anime, "
     "masterpiece, best quality, amazing quality, very aesthetic, "
-    "high resolution, ultra-detailed, absurdres, newest, scenery, detailed eyes"
+    "high resolution, ultra-detailed, absurdres, newest, detailed eyes"
 )
 
 STRUCTURED_PROMPT_TEMPLATE = """You are an expert at composing image generation prompts for anime-style models (ILXL/Stable Diffusion).
@@ -417,6 +418,55 @@ class ImagePromptAgent:
             ]
         )
 
+    def _optimize_for_nova_v55(self, prompt: str, context: UserContext) -> str:
+        """Optimización final específica para Nova Anime XL IL v5.5 (CivitAI 1500882)."""
+        tags = [t.strip() for t in prompt.split(",") if t and t.strip()]
+
+        # Dedupe conservando orden
+        seen = set()
+        deduped = []
+        for tag in tags:
+            key = tag.lower().replace(" ", "_")
+            if key not in seen:
+                deduped.append(tag)
+                seen.add(key)
+
+        # Bloque de calidad recomendado por el modelo
+        quality_head = [
+            "score_9", "score_8_up", "score_7_up", "source_anime",
+            "masterpiece", "best quality", "amazing quality", "very aesthetic",
+            "high resolution", "ultra-detailed", "absurdres", "newest"
+        ]
+
+        for q in reversed(quality_head):
+            qk = q.lower().replace(" ", "_")
+            if qk not in seen:
+                deduped.insert(0, q)
+                seen.add(qk)
+
+        # Inyectar anclas de escena con peso suave para mantener continuidad
+        anchors = []
+        for k in ["environment_anchor", "action_anchor", "camera_anchor", "clothes_state"]:
+            v = (context.scene_state.get(k, "") if context.scene_state else "").strip()
+            if not v:
+                continue
+            vk = v.lower().replace(" ", "_")
+            weighted = f"({vk}:1.15)"
+            if vk not in seen and weighted.lower() not in seen:
+                anchors.append(weighted)
+                seen.add(weighted.lower())
+
+        # Construcción por segmentos con BREAK (recomendado por el checkpoint)
+        core = deduped
+        if anchors:
+            core = core + ["BREAK"] + anchors
+
+        # Limitar longitud para no diluir semántica por exceso de tags
+        max_tags = 160
+        core = core[:max_tags]
+
+        return ", ".join(core)
+
     def _apply_context_guardrails(
         self,
         prompt: str,
@@ -522,15 +572,18 @@ class ImagePromptAgent:
                     logging.debug(f"  BANNED tag removed: '{concept}'")
                     continue
 
-                # Intentar mapear a Danbooru si el mapper está disponible
+                # Intentar mapear a Danbooru si el mapper está disponible (con umbral alto para evitar desvíos)
                 if mapper_available:
-                    mapped = self.tag_mapper.map_concept(norm)
-                    if mapped:
-                        if mapped not in all_tags:
-                            all_tags.append(mapped)
-                        continue
+                    matches = self.tag_mapper.fuzzy_match(norm, limit=1, threshold=86)
+                    if matches:
+                        mapped, score = matches[0]
+                        # Si la confianza es baja para conceptos largos, conservar concepto original para fidelidad.
+                        if score >= 90 or len(norm.split()) <= 2:
+                            if mapped not in all_tags:
+                                all_tags.append(mapped)
+                            continue
 
-                # Si no hay mapeo o no está disponible, usar el original normalizado
+                # Si no hay mapeo fiable o no está disponible, usar el original normalizado
                 if norm_underscore not in all_tags:
                     all_tags.append(norm_underscore)
 
@@ -594,11 +647,12 @@ class ImagePromptAgent:
                 user_message=user_message,
                 reply_text=reply_text or "",
             )
+            final_prompt = self._optimize_for_nova_v55(final_prompt, context)
 
             mapped_count = len([t for f in ["background", "subject", "appearance", "clothing", "pose", "expression", "camera", "nsfw"] for t in structured.get(f, [])])
             extra_count = len(structured.get("extras", []))
             logging.info(f"  Structured: {mapped_count} concepts + {extra_count} extras")
-            logging.info(f"✅ Final prompt (guardrailed): {final_prompt[:120]}...")
+            logging.info(f"✅ Final prompt (Nova-optimized): {final_prompt[:140]}...")
             return final_prompt
 
         except Exception as e:
@@ -629,6 +683,7 @@ class ImagePromptAgent:
 
         prompt = ", ".join(parts)
         guarded = self._apply_context_guardrails(prompt, context, user_message, reply_text)
+        guarded = self._optimize_for_nova_v55(guarded, context)
 
         # Persistir anclas mínimas para la próxima imagen incluso en fallback.
         context.update_scene_state({

@@ -2,6 +2,7 @@ import asyncio
 import logging
 import re
 import json
+import random
 from typing import Optional
 
 import modal
@@ -196,6 +197,14 @@ class ImageGenerator:
     # Prompt assembly (builds final_prompt + negative from raw input)
     # ------------------------------------------------------------------
 
+    def _has_quality_head(self, prompt: str) -> bool:
+        p = (prompt or "").lower()
+        return (
+            "masterpiece" in p
+            and "best quality" in p
+            and ("score_9" in p or "source_anime" in p)
+        )
+
     def _build_final_prompt(
         self,
         prompt: str,
@@ -226,15 +235,17 @@ class ImageGenerator:
             default_suffix = style_suffix or f", {pov_terms}"
             final_prompt = f"{default_prefix}{prompt}{default_suffix}".strip()
         elif is_tag_style:
-            quality_prefix = "masterpiece, best quality, amazing quality, 4k, very aesthetic, high resolution, ultra-detailed, absurdres, "
-            anime_suffix = f", {pov_terms}, depth of field, volumetric lighting"
-            final_prompt = f"{quality_prefix}{prompt}{anime_suffix}".strip()
-            logging.info("✅ Prompt tags ILXL, agregando calidad y POV")
+            quality_prefix = "score_9, score_8_up, score_7_up, source_anime, masterpiece, best quality, amazing quality, very aesthetic, high resolution, ultra-detailed, absurdres, newest, "
+            anime_suffix = f", {pov_terms}, BREAK, depth of field, volumetric lighting"
+            base = prompt if self._has_quality_head(prompt) else f"{quality_prefix}{prompt}"
+            final_prompt = f"{base}{anime_suffix}".strip()
+            logging.info("✅ Prompt tags ILXL, con optimización Nova y POV")
         elif is_redacted:
-            anime_prefix = "masterpiece, best quality, amazing quality, 4k, very aesthetic, high resolution, ultra-detailed, absurdres, "
-            anime_suffix = f", {pov_terms}, depth of field, volumetric lighting"
-            final_prompt = f"{anime_prefix}{prompt}{anime_suffix}".strip()
-            logging.info("✅ Prompt narrativo, agregando calidad y POV para ILXL")
+            anime_prefix = "score_9, score_8_up, score_7_up, source_anime, masterpiece, best quality, amazing quality, very aesthetic, high resolution, ultra-detailed, absurdres, newest, "
+            anime_suffix = f", {pov_terms}, BREAK, depth of field, volumetric lighting"
+            base = prompt if self._has_quality_head(prompt) else f"{anime_prefix}{prompt}"
+            final_prompt = f"{base}{anime_suffix}".strip()
+            logging.info("✅ Prompt narrativo, agregando calidad Nova y POV para ILXL")
         else:
             structured_prompt = self._build_structured_prompt(prompt, pov_terms)
             final_prompt = self._convert_structured_to_flat_prompt(structured_prompt)
@@ -262,6 +273,33 @@ class ImageGenerator:
     # Public API
     # ------------------------------------------------------------------
 
+    def _recommend_inference_params(self, prompt: str, base_steps: int, base_cfg: float) -> tuple[int, float]:
+        """Ajusta costo/velocidad sin perder mucha calidad según complejidad de escena."""
+        p = (prompt or "").lower()
+
+        explicit = any(k in p for k in ["sex", "penetr", "doggy", "missionary", "pov"])
+        complex_scene = any(k in p for k in ["crowd", "city", "nightclub", "rain", "volumetric", "dynamic"])
+        closeup = any(k in p for k in ["close-up", "portrait", "face", "upper_body"])
+
+        steps = base_steps
+        cfg = base_cfg
+
+        # Base optimizada para Nova v5.5 con buen balance costo/calidad
+        if steps == 30:
+            steps = 26
+
+        if explicit or complex_scene:
+            steps = min(30, steps + 2)
+            cfg = min(5.8, cfg + 0.2)
+        elif closeup:
+            steps = max(24, steps - 1)
+            cfg = min(5.4, max(4.8, cfg))
+        else:
+            steps = max(24, steps)
+            cfg = min(5.4, max(4.8, cfg))
+
+        return steps, cfg
+
     async def generate_image(
         self,
         prompt: str,
@@ -271,7 +309,7 @@ class ImageGenerator:
         prompt_only: bool = False,
         num_inference_steps: int = 30,
         guidance_scale: float = 5.0,
-        seed: Optional[int] = 86,
+        seed: Optional[int] = None,
     ) -> bytes:
         """Generate a PNG image via the Modal-deployed Nova Anime ILXL model.
 
@@ -296,9 +334,12 @@ class ImageGenerator:
                 prompt_only=prompt_only,
             )
             neg = negative_prompt or self._default_negative_prompt()
+            steps, cfg = self._recommend_inference_params(final_prompt, num_inference_steps, guidance_scale)
+            if seed is None:
+                seed = random.randint(1, 2_147_483_647)
 
             logging.info(f"Prompt (primeros 100 chars): {final_prompt[:100]}...")
-            logging.info(f"⏳ Generando imagen con Modal (Nova Anime ILXL) usando seed {seed}...")
+            logging.info(f"⏳ Generando imagen con Modal (Nova Anime ILXL) seed={seed}, steps={steps}, cfg={cfg}")
 
             # Modal's .remote() is synchronous-blocking; run in executor to
             # keep the async event loop free.
@@ -309,8 +350,8 @@ class ImageGenerator:
                     prompt=final_prompt,
                     prepend_preprompt=False,  # we already handle quality prefixes
                     negative_prompt=neg,
-                    num_inference_steps=num_inference_steps,
-                    guidance_scale=guidance_scale,
+                    num_inference_steps=steps,
+                    guidance_scale=cfg,
                     seed=seed,
                 ),
             )
