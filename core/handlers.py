@@ -44,6 +44,14 @@ class TelegramBotHandler:
         self.test_mode = os.getenv("BOT_TEST_MODE", "false").lower() in ("1", "true", "yes", "on")
         self.miniapp_url = os.getenv("TELEGRAM_MINIAPP_URL", "").strip()
         
+    def _miniapp_url_with_version(self) -> str:
+        """Añade versionado para evitar caché agresiva del cliente Telegram."""
+        if not self.miniapp_url:
+            return ""
+        ver = os.getenv("TELEGRAM_MINIAPP_VERSION", "20260216")
+        sep = "&" if "?" in self.miniapp_url else "?"
+        return f"{self.miniapp_url}{sep}v={ver}"
+
     def _is_rate_limited(self, user_id: int) -> bool:
         """Control simple anti-spam para evitar respuestas superpuestas y pérdida de inmersión."""
         now = time.time()
@@ -70,7 +78,7 @@ class TelegramBotHandler:
         if self.miniapp_url:
             try:
                 kb = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🎭 Abrir miniapp", web_app=WebAppInfo(url=self.miniapp_url))]
+                    [InlineKeyboardButton("🎭 Abrir miniapp", web_app=WebAppInfo(url=self._miniapp_url_with_version()))]
                 ])
                 await context.bot.send_message(
                     chat_id=update.effective_chat.id,
@@ -239,7 +247,7 @@ Usa `/status` para consultar tu energía en cualquier momento.
 
         # Botón principal para abrir la miniapp
         kb = ReplyKeyboardMarkup(
-            [[KeyboardButton("🎭 Abrir selector de personaje", web_app=WebAppInfo(url=self.miniapp_url))]],
+            [[KeyboardButton("🎭 Abrir selector de personaje", web_app=WebAppInfo(url=self._miniapp_url_with_version()))]],
             resize_keyboard=True,
             one_time_keyboard=True,
         )
@@ -249,20 +257,39 @@ Usa `/status` para consultar tu energía en cualquier momento.
             reply_markup=kb,
         )
 
+    def _extract_miniapp_payload(self, update: Update) -> dict | None:
+        """Intenta extraer payload miniapp desde web_app_data o texto JSON fallback."""
+        if not update.message:
+            return None
+
+        payload_raw = ""
+        if update.message.web_app_data and getattr(update.message.web_app_data, "data", None):
+            payload_raw = update.message.web_app_data.data or ""
+        elif update.message.text and update.message.text.strip().startswith("{"):
+            payload_raw = update.message.text.strip()
+
+        if not payload_raw:
+            return None
+
+        try:
+            payload = json.loads(payload_raw)
+            if isinstance(payload, dict):
+                return payload
+            return None
+        except Exception:
+            return None
+
     async def handle_web_app_data(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Recibe payload JSON de Telegram Mini App y aplica selección de personaje/escenario."""
-        if not update.message or not update.message.web_app_data:
+        if not update.message:
+            return
+
+        payload = self._extract_miniapp_payload(update)
+        if not payload:
             return
 
         user_id = update.effective_user.id
         chat_id = update.effective_chat.id
-        payload_raw = update.message.web_app_data.data or ""
-
-        try:
-            payload = json.loads(payload_raw)
-        except Exception:
-            await context.bot.send_message(chat_id=chat_id, text="❌ Datos inválidos de la miniapp.")
-            return
 
         event_type = str(payload.get("type", "")).strip()
 

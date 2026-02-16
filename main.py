@@ -66,8 +66,9 @@ def run_telegram_bot(config):
     application.add_handler(CommandHandler('miniapp', bot_handler.handle_miniapp))
     application.add_handler(CommandHandler('info', bot_handler.handle_info))
     application.add_handler(CallbackQueryHandler(bot_handler.handle_callback))
-    # Captura robusta de payload de MiniApp (algunos clientes no etiquetan igual WEB_APP_DATA)
-    application.add_handler(MessageHandler(filters.ALL, bot_handler.handle_web_app_data))
+    application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, bot_handler.handle_web_app_data))
+    # Fallback: algunos clientes pueden enviar texto JSON en vez de web_app_data
+    application.add_handler(MessageHandler(filters.Regex(r'^\{.*"type"\s*:\s*"select_character'), bot_handler.handle_web_app_data))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), bot_handler.handle_message))
     application.add_handler(MessageHandler(filters.PHOTO, bot_handler.handle_photo))
 
@@ -103,15 +104,18 @@ def run_telegram_bot(config):
         await app.bot.set_my_commands(commands)
 
         miniapp_url = os.getenv("TELEGRAM_MINIAPP_URL", "").strip()
+        miniapp_ver = os.getenv("TELEGRAM_MINIAPP_VERSION", "20260216")
         if miniapp_url:
+            sep = "&" if "?" in miniapp_url else "?"
+            versioned_url = f"{miniapp_url}{sep}v={miniapp_ver}"
             try:
                 await app.bot.set_chat_menu_button(
                     menu_button=MenuButtonWebApp(
                         text="🎭 Personajes",
-                        web_app=WebAppInfo(url=miniapp_url),
+                        web_app=WebAppInfo(url=versioned_url),
                     )
                 )
-                logging.info(f"✅ Menu button MiniApp configurado: {miniapp_url}")
+                logging.info(f"✅ Menu button MiniApp configurado: {versioned_url}")
             except Exception as e:
                 logging.warning(f"No se pudo configurar menu button MiniApp: {e}")
 
