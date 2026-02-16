@@ -121,7 +121,8 @@ If a tag introduces an object that CANNOT physically be at the current location,
 - Location details: {location_details}
 - Mood: {mood} — {mood_visuals}
 - Initial action: {initial_action}
-- Relationship: {relationship}
+- Relationship score: {relationship}
+- Relationship visual policy: {relationship_visual_policy}
 
 ## CURRENT EXCHANGE:
 User: "{user_message}"
@@ -145,7 +146,8 @@ Character: "{reply_text}"
 11. NEVER use the tag "leaning forward" or "leaning forward slightly". It causes the character to appear as if she is sitting on top of the viewer. Instead, use specific body positions like "sitting on sand, leaning back on hands", "standing straight", or "leaning against wall".
 12. If the character is sitting on the ground, ALWAYS use "leaning back" or "sitting upright" to maintain a clear physical distance from the camera/viewer.
 13. OBJECT REALITY CHECK: Before finalizing, review every tag and ask: "Does this object physically exist at {location}?" Remove anything that doesn't belong. A bed does NOT appear on a beach. A sofa does NOT appear in the ocean.
-14. Always return `scene_state` fully populated. It will be used to keep continuity in the next image.
+14. RELATIONSHIP SAFETY: obey `Relationship visual policy` strictly. If relationship is low, avoid intimate contact poses (no lap-sitting, no straddling, no explicit sexual framing, no forced POV).
+15. Always return `scene_state` fully populated. It will be used to keep continuity in the next image.
 
 Output ONLY valid JSON (include "reasoning" field and `scene_state`). No explanations, no markdown."""
 
@@ -316,6 +318,26 @@ class ImagePromptAgent:
         }
         context.update_scene_state(normalized)
 
+    def _relationship_visual_policy(self, relationship: int) -> str:
+        """Hard visual constraints by trust level to avoid nonsense/too-intimate images."""
+        if relationship < 5:
+            return (
+                "LOW TRUST: keep physical distance. Allowed: talking, standing, sitting nearby, eye-level medium/full shots. "
+                "Forbidden: lap sitting, straddling, kissing, explicit intimacy, POV with direct body contact, 1boy in sexual context."
+            )
+        if relationship < 10:
+            return (
+                "EARLY TRUST: mild closeness only (smiles, playful gestures). "
+                "Forbidden: explicit intimacy, straddling, lap poses, penetration, aggressive POV framing."
+            )
+        if relationship < 15:
+            return (
+                "MODERATE TRUST: romantic framing is allowed, but avoid explicit sexual actions unless dialogue clearly requests it."
+            )
+        return (
+            "HIGH TRUST: intimate framing can be used if consistent with the immediate dialogue and scene context."
+        )
+
     def _build_structured_prompt(
         self,
         context: UserContext,
@@ -350,6 +372,7 @@ class ImagePromptAgent:
             mood_visuals=self._get_mood_visuals(context.mood or "neutral"),
             initial_action=context.initial_action or "none",
             relationship=context.relationship,
+            relationship_visual_policy=self._relationship_visual_policy(context.relationship),
             user_message=user_message,
             reply_text=reply_text or "(no reply yet)",
             conversation_section=conv_section,
@@ -501,12 +524,39 @@ class ImagePromptAgent:
 
         normalized_cleaned = {t.lower().replace(" ", "_") for t in cleaned}
 
+        # Guardrails por relación (evita escenas que no tienen sentido social)
+        low_trust_forbidden = {
+            "straddling", "lap", "sitting_on_lap", "cowgirl_position", "girl_on_top",
+            "kiss", "french_kiss", "sex", "vaginal_penetration", "fellatio",
+            "nude", "completely_nude", "pov", "from_below", "from_above",
+            "1boy", "on_all_fours", "doggy_style", "missionary"
+        }
+        early_trust_forbidden = {
+            "straddling", "cowgirl_position", "vaginal_penetration", "fellatio",
+            "doggy_style", "missionary", "on_all_fours"
+        }
+
+        if context.relationship < 5:
+            cleaned = [t for t in cleaned if t.lower().replace(" ", "_") not in low_trust_forbidden]
+            normalized_cleaned = {t.lower().replace(" ", "_") for t in cleaned}
+            # encuadre seguro por defecto
+            if "medium_shot" not in normalized_cleaned:
+                cleaned.append("medium shot")
+                normalized_cleaned.add("medium_shot")
+            if "eye_level" not in normalized_cleaned:
+                cleaned.append("eye level")
+                normalized_cleaned.add("eye_level")
+
+        elif context.relationship < 10:
+            cleaned = [t for t in cleaned if t.lower().replace(" ", "_") not in early_trust_forbidden]
+            normalized_cleaned = {t.lower().replace(" ", "_") for t in cleaned}
+
         # Hard requirements de coherencia
         if "1girl" not in normalized_cleaned:
             cleaned.insert(0, "1girl")
             normalized_cleaned.add("1girl")
 
-        if self._needs_pov_interaction(user_message, reply_text):
+        if self._needs_pov_interaction(user_message, reply_text) and context.relationship >= 10:
             if "pov" not in normalized_cleaned:
                 cleaned.append("pov")
                 normalized_cleaned.add("pov")
