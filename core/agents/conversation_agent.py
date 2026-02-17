@@ -35,11 +35,8 @@ class ConversationAgent:
             base_url=base_url,
         )
         self.memories: dict[int, List] = {}
-        self.memory_path = Path(__file__).resolve().parent.parent.parent / "data" / "chat_memory.json"
         self.summaries: dict[int, str] = {}
-        self.summary_path = Path(__file__).resolve().parent.parent.parent / "data" / "chat_summaries.json"
-        self._load_memories()
-        self._load_summaries()
+        # Persistencia desactivada temporalmente (sin memoria entre sesiones).
     
     @traceable(
         name="ExecuteTool",
@@ -80,44 +77,16 @@ class ConversationAgent:
         return AIMessage(content=content)
 
     def _load_memories(self) -> None:
-        try:
-            if not self.memory_path.exists():
-                return
-            raw = json.loads(self.memory_path.read_text(encoding="utf-8"))
-            for uid_str, items in raw.items():
-                uid = int(uid_str)
-                self.memories[uid] = [self._deserialize_message(x) for x in items if isinstance(x, dict)]
-            logging.info(f"Loaded chat memory for {len(self.memories)} user(s)")
-        except Exception as e:
-            logging.error(f"Error loading chat memories: {e}")
+        return
 
     def _save_memories(self) -> None:
-        try:
-            self.memory_path.parent.mkdir(parents=True, exist_ok=True)
-            payload = {
-                str(uid): [self._serialize_message(m) for m in history[-20:]]
-                for uid, history in self.memories.items()
-            }
-            self.memory_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        except Exception as e:
-            logging.error(f"Error saving chat memories: {e}")
+        return
 
     def _load_summaries(self) -> None:
-        try:
-            if not self.summary_path.exists():
-                return
-            raw = json.loads(self.summary_path.read_text(encoding="utf-8"))
-            self.summaries = {int(k): str(v) for k, v in raw.items()}
-        except Exception as e:
-            logging.error(f"Error loading chat summaries: {e}")
+        return
 
     def _save_summaries(self) -> None:
-        try:
-            self.summary_path.parent.mkdir(parents=True, exist_ok=True)
-            payload = {str(uid): summary for uid, summary in self.summaries.items() if summary}
-            self.summary_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        except Exception as e:
-            logging.error(f"Error saving chat summaries: {e}")
+        return
 
     def _compact_history_if_needed(self, user_id: int) -> None:
         """Compacta historial largo en un resumen para mantener coherencia en sesiones largas."""

@@ -1,4 +1,3 @@
-import json
 import logging
 from pathlib import Path
 from typing import Optional, Union
@@ -51,10 +50,9 @@ class ChatOrchestrator:
         self.animator = ImageAnimator(api_key=replicate_api_token)
         # Contador de imágenes por usuario (orquestador decide cuándo generar)
         self.image_counters: dict[int, int] = {}
-        # Último prompt generado por usuario (para usar como ejemplo)
+        # Último prompt generado por usuario (solo en memoria de sesión)
         self.last_prompts: dict[int, str] = {}
         self.last_prompts_path = Path(__file__).resolve().parent.parent / "data" / "last_prompts.json"
-        self._load_last_prompts()
         # Cache para botón "Animar": key -> (data-URI, image_prompt) (callback_data tiene límite 64 bytes)
         self._animate_image_cache: dict[str, tuple[str, Optional[str]]] = {}
 
@@ -67,24 +65,10 @@ class ChatOrchestrator:
         return self._animate_image_cache.pop(key, None)
 
     def _load_last_prompts(self) -> None:
-        try:
-            if not self.last_prompts_path.exists():
-                return
-            data = json.loads(self.last_prompts_path.read_text(encoding="utf-8"))
-            self.last_prompts = {int(k): str(v) for k, v in data.items()}
-        except Exception as e:
-            logging.error(f"Failed loading last prompts: {e}")
+        return
 
     def _save_last_prompts(self) -> None:
-        try:
-            self.last_prompts_path.parent.mkdir(parents=True, exist_ok=True)
-            payload = {str(k): v for k, v in self.last_prompts.items()}
-            self.last_prompts_path.write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-        except Exception as e:
-            logging.error(f"Failed saving last prompts: {e}")
+        return
 
     @traceable(
         name="Orchestrator_ProcessMessage",

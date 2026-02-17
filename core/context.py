@@ -1,5 +1,3 @@
-import json
-import logging
 from pathlib import Path
 from typing import Optional, Dict, List
 from pydantic import BaseModel, Field
@@ -81,45 +79,23 @@ class UserContext(BaseModel):
 class ContextManager:
     def __init__(self, storage_path: Optional[Path] = None):
         self._contexts: Dict[int, UserContext] = {}
+        # Persistencia desactivada temporalmente por decisión de producto.
         self.storage_path = storage_path or (Path(__file__).resolve().parent.parent / "data" / "user_contexts.json")
-        self._load_contexts()
 
     def _load_contexts(self):
-        """Carga contextos persistidos para mantener continuidad entre reinicios."""
-        try:
-            if not self.storage_path.exists():
-                return
-            data = json.loads(self.storage_path.read_text(encoding="utf-8"))
-            for uid_str, payload in data.items():
-                try:
-                    uid = int(uid_str)
-                    self._contexts[uid] = UserContext.model_validate(payload)
-                except Exception as e:
-                    logging.warning(f"Context skip for {uid_str}: {e}")
-            logging.info(f"Loaded {len(self._contexts)} persisted user context(s)")
-        except Exception as e:
-            logging.error(f"Failed loading user contexts: {e}")
+        """Desactivado temporalmente (sin memoria entre sesiones)."""
+        return
 
     def save_contexts(self):
-        """Persistencia explícita de contexto para inmersión duradera."""
-        try:
-            self.storage_path.parent.mkdir(parents=True, exist_ok=True)
-            payload = {str(uid): ctx.model_dump() for uid, ctx in self._contexts.items()}
-            self.storage_path.write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-        except Exception as e:
-            logging.error(f"Failed saving user contexts: {e}")
+        """Desactivado temporalmente (sin memoria entre sesiones)."""
+        return
 
     def get_context(self, user_id: int) -> UserContext:
         if user_id not in self._contexts:
             self._contexts[user_id] = UserContext(user_id=user_id)
-            self.save_contexts()
         return self._contexts[user_id]
 
     def reset_context(self, user_id: int):
         if user_id in self._contexts:
             del self._contexts[user_id]
-        self.save_contexts()
         return self.get_context(user_id)
