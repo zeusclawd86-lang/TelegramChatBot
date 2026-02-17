@@ -65,6 +65,12 @@ def run_telegram_bot(config):
     application.add_handler(CommandHandler('setrel', bot_handler.handle_setrel))
     application.add_handler(CommandHandler('miniapp', bot_handler.handle_miniapp))
     application.add_handler(CommandHandler('info', bot_handler.handle_info))
+
+    # Fallbacks para clientes que envían "/comando" como texto normal (sin entidad command)
+    application.add_handler(MessageHandler(filters.Regex(r'^/info(?:\s|$)'), bot_handler.handle_info))
+    application.add_handler(MessageHandler(filters.Regex(r'^/miniapp(?:\s|$)'), bot_handler.handle_miniapp))
+    application.add_handler(MessageHandler(filters.Regex(r'^/setrel(?:\s|$)'), bot_handler.handle_setrel))
+
     application.add_handler(CallbackQueryHandler(bot_handler.handle_callback))
     application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, bot_handler.handle_web_app_data))
     # Fallback: algunos clientes pueden enviar texto JSON en vez de web_app_data
